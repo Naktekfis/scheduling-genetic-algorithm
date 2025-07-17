@@ -229,58 +229,90 @@ class Schedule:
         hard_conflicts = 0
         soft_conflicts = 0
 
-        for i in range(len(self._classes)):
-            c1 = self._classes[i]
+        # Struktur data untuk tracking jadwal
+        dosen_times = {}
+        room_times = {}
+        group_times = {}
 
-            # K2: Kapasitas ruangan harus mencukupi
+        for c in self._classes:
+            course = c.get_course()
+            sks = course.get_sks()
+            instructor_id = c.get_instructor().get_id()
+            room_num = c.get_room().get_number()
+            group = course.get_student_group()
+
+            # Ambil semua slot waktu yang dipakai kelas ini
+            times = [c.get_meeting_time(s) for s in [1,2,4] if c.get_meeting_time(s) is not None]
+
+            # K2: Kapasitas ruangan
             if constraints_loader.is_enabled('K2'):
-                if c1.get_course().get_type() != 3 and c1.get_room().get_seating_capacity() < c1.get_course().get_max_students():
+                if course.get_type() != 3 and c.get_room().get_seating_capacity() < course.get_max_students():
                     hard_conflicts += 1
 
-            # K6 & K7: Slot waktu tidak boleh digunakan (blocked) atau jadwal sudah fix
-            if c1.get_course().get_sks() == 3:
+            # K6, K7, K_internal, L1: Cek per kelas
+            if sks == 3:
                 if constraints_loader.is_enabled('K_internal'):
-                    if c1.get_meeting_time(2).get_group('g1') == c1.get_meeting_time(1).get_group('g1'):
+                    if c.get_meeting_time(2).get_group('g1') == c.get_meeting_time(1).get_group('g1'):
                         hard_conflicts += 1
                 if constraints_loader.is_enabled('K6') or constraints_loader.is_enabled('K7'):
-                    if c1.get_meeting_time(2).is_blocked() or c1.get_meeting_time(1).is_blocked():
+                    if c.get_meeting_time(2).is_blocked() or c.get_meeting_time(1).is_blocked():
                         hard_conflicts += 1
                 if constraints_loader.is_enabled('L1'):
-                    if c1.get_meeting_time(1).is_edge_time():
+                    if c.get_meeting_time(1).is_edge_time():
                         soft_conflicts += 1
-            elif c1.get_course().get_sks() == 2:
+            elif sks == 2:
                 if constraints_loader.is_enabled('K6'):
-                    if c1.get_meeting_time(2).is_blocked():
+                    if c.get_meeting_time(2).is_blocked():
                         hard_conflicts += 1
-            elif c1.get_course().get_sks() == 4:
+            elif sks == 4:
                 if constraints_loader.is_enabled('K6'):
-                    if c1.get_meeting_time(4).is_blocked():
+                    if c.get_meeting_time(4).is_blocked():
                         hard_conflicts += 1
 
-            # --- PENGECEKAN KONFLIK EKSTERNAL (ANTAR DUA KELAS) ---
+            # Cek bentrok dosen, ruangan, kelompok mahasiswa
+            for t in times:
+                # K3: Dosen tidak boleh bentrok
+                if constraints_loader.is_enabled('K3'):
+                    key = (instructor_id, t.get_id())
+                    if key in dosen_times:
+                        hard_conflicts += 1
+                    else:
+                        dosen_times[key] = c
+
+                # K_internal: Ruangan tidak boleh bentrok
+                if constraints_loader.is_enabled('K_internal'):
+                    key = (room_num, t.get_id())
+                    if key in room_times:
+                        hard_conflicts += 1
+                    else:
+                        room_times[key] = c
+
+                # K1: Kelompok mahasiswa tidak boleh bentrok
+                if constraints_loader.is_enabled('K1'):
+                    key = (group, t.get_id())
+                    if key in group_times:
+                        hard_conflicts += 1
+                    else:
+                        group_times[key] = c
+
+        # Loop kedua untuk constraint yang butuh dua kelas sekaligus (K4, K5, L2)
+        for i in range(len(self._classes)):
+            c1 = self._classes[i]
             for j in range(i + 1, len(self._classes)):
                 c2 = self._classes[j]
-                is_overlap = self.check_time_overlap(c1, c2)
-
-                if is_overlap:
-                    if constraints_loader.is_enabled('K1'):
-                        if c1.get_course().get_student_group() == c2.get_course().get_student_group():
-                            hard_conflicts += 1
-                    if constraints_loader.is_enabled('K3'):
-                        if c1.get_instructor().get_id() == c2.get_instructor().get_id():
-                            hard_conflicts += 1
-                    if constraints_loader.is_enabled('K_internal'):
-                        if c1.get_room().get_number() == c2.get_room().get_number():
-                            hard_conflicts += 1
+                if self.check_time_overlap(c1, c2):
+                    # K4
                     if constraints_loader.is_enabled('K4'):
                         c1_course, c2_course = c1.get_course(), c2.get_course()
                         if (c1_course.get_type() == 3 and c1_course.get_student_group()[0] == 2 and c2_course.get_student_group()[0] == 3) or \
                            (c2_course.get_type() == 3 and c2_course.get_student_group()[0] == 2 and c1_course.get_student_group()[0] == 3):
                             hard_conflicts += 1
+                    # K5
                     if constraints_loader.is_enabled('K5'):
                         c1_course, c2_course = c1.get_course(), c2.get_course()
                         if c1_course.get_student_group()[0] == 4 and c2_course.get_student_group()[0] == 4 and c1_course.get_type() != c2_course.get_type():
                             hard_conflicts += 1
+                    # L2
                     if constraints_loader.is_enabled('L2'):
                         c1_course, c2_course = c1.get_course(), c2.get_course()
                         if (c1_course.is_difficult() and c1_course.get_student_group()[0] == 2 and c2_course.get_student_group()[0] == 3) or \
@@ -289,7 +321,7 @@ class Schedule:
 
         self._num_of_conflicts = hard_conflicts + soft_conflicts
         return 1 / (self._num_of_conflicts + 1)
- 
+    
     def check_time_overlap(self, c1, c2):
         """Helper function untuk memeriksa apakah dua kelas (c1, c2) memiliki waktu yang tumpang tindih."""
         # Kumpulkan semua slot waktu untuk setiap kelas
