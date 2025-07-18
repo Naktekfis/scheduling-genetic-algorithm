@@ -234,6 +234,7 @@ class Schedule:
         room_times = {}
         group_times = {}
 
+        # Loop pertama untuk constraint yang hanya butuh satu kelas
         for c in self._classes:
             course = c.get_course()
             sks = course.get_sks()
@@ -301,18 +302,23 @@ class Schedule:
             for j in range(i + 1, len(self._classes)):
                 c2 = self._classes[j]
                 if self.check_time_overlap(c1, c2):
-                    # K4
+                    # K4: Cek bentrok antara kelas praktikum tingkat 2 dan 3
+                    # K4 hanya berlaku jika kedua kelas adalah praktikum
                     if constraints_loader.is_enabled('K4'):
                         c1_course, c2_course = c1.get_course(), c2.get_course()
                         if (c1_course.get_type() == 3 and c1_course.get_student_group()[0] == 2 and c2_course.get_student_group()[0] == 3) or \
                            (c2_course.get_type() == 3 and c2_course.get_student_group()[0] == 2 and c1_course.get_student_group()[0] == 3):
                             hard_conflicts += 1
-                    # K5
+
+                    # K5: Cek bentrok antara mata kuliah wajib tingkat 4 dan pilihan tingkat 4
+                    # K5 hanya berlaku jika kedua kelas adalah mata kuliah tingkat 4
                     if constraints_loader.is_enabled('K5'):
                         c1_course, c2_course = c1.get_course(), c2.get_course()
                         if c1_course.get_student_group()[0] == 4 and c2_course.get_student_group()[0] == 4 and c1_course.get_type() != c2_course.get_type():
                             hard_conflicts += 1
-                    # L2
+
+                    # L2: Cek bentrok antara mata kuliah sulit tingkat 2 dan 3
+                    # L2 hanya berlaku jika kedua kelas adalah mata kuliah sulit
                     if constraints_loader.is_enabled('L2'):
                         c1_course, c2_course = c1.get_course(), c2.get_course()
                         if (c1_course.is_difficult() and c1_course.get_student_group()[0] == 2 and c2_course.get_student_group()[0] == 3) or \
@@ -366,11 +372,20 @@ class Population:
 class GeneticAlgorithm:
     """Kelas yang menjalankan proses evolusi."""
     
-    def evolve(self, population):
-        """Satu siklus evolusi: crossover diikuti mutasi."""
-        return self._mutate_population(self._crossover_population(population))
+    def __init__(self):
+        """Inisialisasi dengan mengambil parameter dari input pengguna."""
+        self._crossover_rate = CROSSOVER_RATE
+        self._mutation_rate = MUTATION_RATE # Nilai awal dari input
 
-    def _crossover_population(self, pop):
+    def set_mutation_rate(self, rate):
+        """Fungsi untuk mengatur tingkat mutasi secara dinamis selama evolusi."""
+        self._mutation_rate = rate
+
+    def evolve(self, population, tournament_size):
+        """Satu siklus evolusi: crossover diikuti mutasi."""
+        return self._mutate_population(self._crossover_population(population, tournament_size))
+
+    def _crossover_population(self, pop, tournament_size): 
         """Melakukan crossover pada populasi untuk menciptakan generasi baru."""
         crossover_pop = Population(0)
         
@@ -380,9 +395,9 @@ class GeneticAlgorithm:
             
         # Crossover sisa populasi
         for _ in range(NUMB_OF_ELITE_SCHEDULES, POPULATION_SIZE):
-            # Pilih 2 parent menggunakan seleksi turnamen
-            parent1 = self._tournament_selection(pop).get_schedules()[0]
-            parent2 = self._tournament_selection(pop).get_schedules()[0]
+            # Pilih 2 parent menggunakan seleksi turnamen dengan ukuran dinamis
+            parent1 = self._tournament_selection(pop, tournament_size).get_schedules()[0]
+            parent2 = self._tournament_selection(pop, tournament_size).get_schedules()[0]
             
             # Lakukan crossover dan tambahkan anak ke populasi baru
             child = self._crossover_schedule(parent1, parent2)
@@ -404,7 +419,8 @@ class GeneticAlgorithm:
         child_schedule = Schedule().initialize()
         for i in range(len(child_schedule.get_classes())):
             # Jika random number < Crossover Rate, ambil gen dari parent 1, jika tidak, dari parent 2
-            if random.random() < CROSSOVER_RATE:
+            # Menggunakan atribut internal self._crossover_rate
+            if random.random() < self._crossover_rate:
                 child_schedule.get_classes()[i] = parent1.get_classes()[i]
             else:
                 child_schedule.get_classes()[i] = parent2.get_classes()[i]
@@ -418,17 +434,17 @@ class GeneticAlgorithm:
         temp_schedule = Schedule().initialize()
         for i in range(len(schedule_to_mutate.get_classes())):
              # Jika random number < Mutation Rate, ganti gen ini dengan gen acak baru
-            if random.random() < MUTATION_RATE:
+             # Menggunakan atribut internal self._mutation_rate yang dinamis
+            if random.random() < self._mutation_rate:
                 schedule_to_mutate.get_classes()[i] = temp_schedule.get_classes()[i]
         return schedule_to_mutate
 
-    def _tournament_selection(self, pop):
+    def _tournament_selection(self, pop, size):
         """
-        Memilih individu terbaik dari 'turnamen'.
-        Sebuah sub-set acak dari populasi dipilih, dan yang terbaik dari sub-set itu menang.
+        Memilih individu terbaik dari 'turnamen' dengan ukuran yang dinamis.
         """
         tournament_pop = Population(0)
-        for _ in range(TOURNAMENT_SELECTION_SIZE):
+        for _ in range(size):
             tournament_pop.get_schedules().append(random.choice(pop.get_schedules()))
             
         # Urutkan peserta turnamen berdasarkan fitness dan kembalikan yang terbaik
@@ -480,7 +496,6 @@ class DisplayManager:
         df.to_csv("Jadwal_Final_Optimal.csv", index=False)
         print("\nJadwal optimal telah disimpan ke file 'Jadwal_Final_Optimal.csv'")
 
-
 # MAIN EXECUTION BLOCK
 if __name__ == '__main__':
     start_time = time.time()
@@ -496,24 +511,58 @@ if __name__ == '__main__':
     population.get_schedules().sort(key=lambda x: x.get_fitness(), reverse=True)
     best_schedule = population.get_schedules()[0]
 
-    # 2. Proses Evolusi
+    # 2. Pemantauan proses Evolusi
     print(f"\nMemulai proses evolusi untuk {MAX_GENERATION} generasi...")
     genetic_algorithm = GeneticAlgorithm()
     generation_num = 0
 
+    # Pengaturan Algoritma Dinamis
+
+    # 2a. Mutasi Adaptif
+    INITIAL_MUTATION_RATE = MUTATION_RATE 
+    FINAL_MUTATION_RATE = 0.05
+    print(f"Menggunakan Mutasi Adaptif: Mulai dari {INITIAL_MUTATION_RATE}, menuju {FINAL_MUTATION_RATE}")
+
+    # 2b. Seleksi Turnamen Adaptif
+    # Nilai awal diambil dari input, nilai akhir bisa kita tentukan.
+    # Pastikan FINAL_TOURNAMENT_SIZE tidak lebih besar dari POPULATION_SIZE
+    INITIAL_TOURNAMENT_SIZE = TOURNAMENT_SELECTION_SIZE
+    FINAL_TOURNAMENT_SIZE = min(POPULATION_SIZE, 100)
+    print(f"Menggunakan Seleksi Turnamen Adaptif: Ukuran dari {INITIAL_TOURNAMENT_SIZE} meningkat ke {FINAL_TOURNAMENT_SIZE}")
+    
+    # 2c. Progress Bar untuk Evolusi
     with tqdm(total=MAX_GENERATION, desc="Evolusi Generasi") as pbar:
         for i in range(MAX_GENERATION):
             generation_num = i + 1
             
-            # Evolve the population
-            population = genetic_algorithm.evolve(population)
+            # --- Perhitungan dan Pengaturan Dinamis ---
+            progress = (generation_num - 1) / (MAX_GENERATION - 1) if MAX_GENERATION > 1 else 1
+            
+            # Hitung rate mutasi saat ini (menurun)
+            current_mutation_rate = INITIAL_MUTATION_RATE * (1 - progress) + FINAL_MUTATION_RATE * progress
+            genetic_algorithm.set_mutation_rate(current_mutation_rate)
+            
+            # Hitung ukuran turnamen saat ini (meningkat)
+            current_tournament_size = int(INITIAL_TOURNAMENT_SIZE * (1 - progress) + FINAL_TOURNAMENT_SIZE * progress)
+            # Pastikan ukurannya minimal 2
+            current_tournament_size = max(2, current_tournament_size)
+
+            # Evolve the population, teruskan parameter dinamis
+            population = genetic_algorithm.evolve(population, current_tournament_size)
             
             # Urutkan populasi baru
             population.get_schedules().sort(key=lambda x: x.get_fitness(), reverse=True)
             
             # Cek kondisi berhenti
             best_schedule = population.get_schedules()[0]
-            pbar.set_postfix({"Fitness Terbaik": f"{best_schedule.get_fitness():.4f}", "Konflik": best_schedule.get_num_of_conflicts()})
+            
+            # Update progress bar dengan semua informasi dinamis
+            pbar.set_postfix({
+                "Fitness Terbaik": f"{best_schedule.get_fitness():.4f}", 
+                "Konflik": best_schedule.get_num_of_conflicts(),
+                "Rate Mutasi": f"{current_mutation_rate:.3f}",
+                "Size Turnamen": current_tournament_size # <--- Tambahan baru
+            })
             pbar.update(1)
 
             if best_schedule.get_fitness() == 1.0:
