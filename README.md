@@ -9,7 +9,8 @@ Struktur folder proyek adalah sebagai berikut:
 ```
 scheduling-genetic-algorithm
 ├── src
-│   ├── penjadwalan_genetic2.py          # Algoritma penjadwalan utama
+│   ├── penjadwalan_genetic.py           # Algoritma penjadwalan utama
+│   ├── penjadwalan_genetic_adaptif.py   # Algoritma penjadwalan adaptif (parameternya berubah setiap waktu)
 │   ├── constraints
 │   │   └── constraints_loader.py        # Loader untuk constraint yang bisa dikustomisasi dari CSV
 │   └── types
