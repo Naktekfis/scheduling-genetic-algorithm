@@ -6,6 +6,6 @@ K4,hard,Praktikum (4 SKS) tingkat 2 tidak boleh bentrok dengan jadwal tingkat 3,
 K5,hard,Mata kuliah wajib tingkat 4 tidak boleh bentrok dengan mata kuliah pilihan tingkat 4,1
 K6,hard,Slot waktu tidak boleh digunakan (blocked),1
 K7,hard,Jadwal sudah fix,1
-K_internal,hard,Jadwal 2 SKS dan 1 SKS untuk matkul 3 SKS tidak boleh di hari yang sama,1
+K8,hard,Jadwal 2 SKS dan 1 SKS untuk matkul 3 SKS tidak boleh di hari yang sama,1
 L1,soft,Jadwal 1 SKS tidak boleh di awal/akhir hari,1
 L2,soft,Mata kuliah sulit tingkat 2 tidak boleh bentrok dengan jadwal tingkat 3,1

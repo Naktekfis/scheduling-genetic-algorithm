@@ -4,8 +4,10 @@ import random
 import pandas as pd
 import time
 import os
+import sys
 from tqdm import tqdm
 from constraints.constraints_loader import ConstraintLoader
+from config import settings
 
 constraints_loader = ConstraintLoader('D:/Coding/Algoritma Genetika/scheduling-genetic-algorithm/data/Constraints.csv')
 
@@ -18,12 +20,12 @@ print("--- Sistem Cerdas Penjadwalan Kuliah Berbasis Algoritma Genetika ---")
 print("Silakan masukkan parameter untuk Algoritma Genetika:\n")
 
 # Parameter Algoritma Genetika (diambil dari input pengguna)
-POPULATION_SIZE = int(input("Ukuran Populasi (contoh: 10, 50, 100): "))
-TOURNAMENT_SELECTION_SIZE = int(input("Ukuran Seleksi Turnamen (contoh: 4, 32): "))
-MAX_GENERATION = int(input("Jumlah Generasi Maksimum (contoh: 9000, 2000, 1000): "))
-NUMB_OF_ELITE_SCHEDULES = int(input("Jumlah Kromosom Elit (contoh: 1): "))
-CROSSOVER_RATE = float(input("Probabilitas Crossover (contoh: 0.1, 0.5, 0.9): "))
-MUTATION_RATE = float(input("Probabilitas Mutasi (contoh: 0.1, 0.5, 0.9): "))
+POPULATION_SIZE = settings.POPULATION_SIZE
+TOURNAMENT_SELECTION_SIZE = settings.TOURNAMENT_SELECTION_SIZE
+MAX_GENERATION = settings.MAX_GENERATION
+NUMB_OF_ELITE_SCHEDULES = settings.NUMB_OF_ELITE_SCHEDULES
+CROSSOVER_RATE = settings.CROSSOVER_RATE
+MUTATION_RATE = settings.MUTATION_RATE
 
 # DEFINISI KELAS-KELAS DATA (ENTITAS)
 
@@ -226,6 +228,7 @@ class Schedule:
         return self
 
     def calculate_fitness(self):
+        
         hard_conflicts = 0
         soft_conflicts = 0
 
