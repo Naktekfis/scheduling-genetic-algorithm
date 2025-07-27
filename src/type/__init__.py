@@ -1,5 +1,3 @@
-# File: src/types/__init__.py
-
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
 

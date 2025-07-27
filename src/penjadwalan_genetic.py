@@ -14,7 +14,7 @@ from tqdm import tqdm
 
 from src.constraints.constraints_loader import ConstraintLoader
 from config import settings
-from src.type import Room, Instructor, MeetingTime, Course, Class  # <-- FIX 1: Typo 'types'
+from src.type import Room, Instructor, MeetingTime, Course, Class
 
 # KONFIGURASI DAN PARAMETER UTAMA
 DATA_DIR = os.path.join(BASE_DIR, 'data')
@@ -32,7 +32,7 @@ NUMB_OF_ELITE_SCHEDULES = settings.NUMB_OF_ELITE_SCHEDULES
 CROSSOVER_RATE = settings.CROSSOVER_RATE
 MUTATION_RATE = settings.MUTATION_RATE
 
-# LOAD DATA
+# LOAD KELAS DATA
 class Data:
     try:
         ROOMS = pd.read_csv(os.path.join(DATA_DIR, 'Ruangan.csv'), header=None).values.tolist()
@@ -83,56 +83,69 @@ class Schedule:
 
     def initialize(self):
         """
-        Inisialisasi jadwal.
-        Untuk mata kuliah dengan jadwal tetap (is_fixed), alokasikan waktu yang sudah ditentukan.
-        Untuk yang lain, alokasikan secara acak.
+        Inisialisasi jadwal dengan logika yang bisa menangani jadwal tetap parsial untuk 3 SKS,
+        berdasarkan pencarian string waktu dari file CSV.
         """
         courses = self._data.get_courses()
         
-        # Buat tabel pencarian untuk semua MeetingTime agar mudah dicari berdasarkan ID.
-        all_meeting_times = {mt.id: mt for sks in [1, 2, 4] for mt in self._data.get_meeting_times(sks)}
+        # Cari berdasarkan string waktu untuk semua SKS
+        all_meeting_times = {mt.time: mt for sks in [1, 2, 4] for mt in self._data.get_meeting_times(sks)}
 
         for i, course in enumerate(courses):
             new_class = Class(i, course)
-            new_class.instructor = course.instructors[0] # Dosen tetap bisa diacak dari list jika ada >1
-            new_class.room = random.choice(self._data.get_rooms()) # Ruangan masih acak
+            new_class.instructor = course.instructors[0]
+            
+            # Mata kuliah 3 SKS 
+            if course.sks == 3:
+                fixed_2_sks_str = course.fixed_schedule_2jam
+                fixed_1_sks_str = course.fixed_schedule_1jam
 
-            # Logika IF/ELSE untuk jadwal tetap vs acak
-            if course.is_fixed:
-                # JIKA JADWAL SUDAH TETAP
-                sks = course.sks
-                fixed_schedule_id = None
-                if sks == 4: fixed_schedule_id = course.fixed_schedule_4jam
-                elif sks == 2: fixed_schedule_id = course.fixed_schedule_2jam
-                elif sks == 1: fixed_schedule_id = course.fixed_schedule_1jam
-                
-                # Cari objek MeetingTime yang sesuai dari ID yang didapat
-                fixed_meeting_time = all_meeting_times.get(fixed_schedule_id)
-                
-                if fixed_meeting_time:
-                    new_class.meeting_times[sks] = fixed_meeting_time
+                # Cek bagian 2 SKS
+                if pd.notna(fixed_2_sks_str):
+                    mt = all_meeting_times.get(fixed_2_sks_str) # Mencari berdasarkan string waktu
+                    if mt:
+                        new_class.meeting_times[2] = mt
+                    else:
+                        print(f"PERINGATAN: String Jadwal Tetap 2 SKS '{fixed_2_sks_str}' untuk matkul '{course.name}' tidak cocok. Menggunakan jadwal acak.")
+                        new_class.meeting_times[2] = random.choice(self._data.get_meeting_times(2))
                 else:
-                    # Fallback: Jika ID jadwal tetap tidak valid, acak saja dan beri peringatan
-                    print(f"PERINGATAN: ID Jadwal Tetap '{fixed_schedule_id}' untuk matkul '{course.name}' tidak ditemukan. Menggunakan jadwal acak sebagai gantinya.")
-                    new_class.meeting_times[sks] = random.choice(self._data.get_meeting_times(sks))
-            
+                    new_class.meeting_times[2] = random.choice(self._data.get_meeting_times(2))
+                
+                # Cek bagian 1 SKS
+                if pd.notna(fixed_1_sks_str):
+                    mt = all_meeting_times.get(fixed_1_sks_str) # Mencari berdasarkan string waktu
+                    if mt:
+                        new_class.meeting_times[1] = mt
+                    else:
+                        print(f"PERINGATAN: String Jadwal Tetap 1 SKS '{fixed_1_sks_str}' untuk matkul '{course.name}' tidak cocok. Menggunakan jadwal acak.")
+                        new_class.meeting_times[1] = random.choice(self._data.get_meeting_times(1))
+                else:
+                    new_class.meeting_times[1] = random.choice(self._data.get_meeting_times(1))
+
+            # Kasus 2: Mata kuliah 1, 2, atau 4 SKS
             else:
-                # Jika tidak ada jadwal tetap, alokasikan secara acak
-                if course.sks == 4:
-                    new_class.meeting_times[4] = random.choice(self._data.get_meeting_times(4))
-                elif course.sks == 3:
-                    new_class.meeting_times[2] = random.choice(self._data.get_meeting_times(2))
-                    new_class.meeting_times[1] = random.choice(self._data.get_meeting_times(1))
-                elif course.sks == 2:
-                    new_class.meeting_times[2] = random.choice(self._data.get_meeting_times(2))
-                elif course.sks == 1:
-                    new_class.meeting_times[1] = random.choice(self._data.get_meeting_times(1))
-            
-            # Atur ruangan Lab Komputer khusus untuk mata kuliah Praktikum (course_type == 3)
+                if course.is_fixed:
+                    sks = course.sks
+                    fixed_schedule_str = None
+                    if sks == 4: fixed_schedule_str = course.fixed_schedule_4jam
+                    elif sks == 2: fixed_schedule_str = course.fixed_schedule_2jam
+                    elif sks == 1: fixed_schedule_str = course.fixed_schedule_1jam
+                    
+                    mt = all_meeting_times.get(fixed_schedule_str) # Cari berdasarkan string waktu
+                    if mt:
+                        new_class.meeting_times[sks] = mt
+                    else:
+                        print(f"PERINGATAN: String Jadwal Tetap '{fixed_schedule_str}' untuk matkul '{course.name}' tidak cocok. Menggunakan jadwal acak.")
+                        new_class.meeting_times[sks] = random.choice(self._data.get_meeting_times(sks))
+                else:
+                    new_class.meeting_times[course.sks] = random.choice(self._data.get_meeting_times(course.sks))
+
+            # LOGIKA PENETAPAN RUANGAN
             if course.course_type == 3:
                 lab_room = next((r for r in self._data.get_rooms() if "Lab" in r.number), None)
-                if lab_room:
-                    new_class.room = lab_room
+                new_class.room = lab_room if lab_room else random.choice(self._data.get_rooms())
+            else:
+                new_class.room = random.choice(self._data.get_rooms())
 
             self._classes.append(new_class)
         return self
@@ -154,9 +167,9 @@ class Schedule:
             mt4 = c.meeting_times.get(4)
 
             if sks == 3 and mt1 and mt2:
-                if constraints_loader.is_enabled('K_internal') and mt2.groups.get('g1') == mt1.groups.get('g1'): hard_conflicts += 1 # <-- FIX 5
+                if constraints_loader.is_enabled('K8') and mt2.groups.get('g1') == mt1.groups.get('g1'): hard_conflicts += 1
                 if (constraints_loader.is_enabled('K6') or constraints_loader.is_enabled('K7')) and (mt2.is_blocked or mt1.is_blocked): hard_conflicts += 1
-                if constraints_loader.is_enabled('L1') and mt1.is_edge_time: soft_conflicts += 1 # <-- FIX 6
+                if constraints_loader.is_enabled('L1') and mt1.is_edge_time: soft_conflicts += 1
             elif sks == 2 and mt2 and constraints_loader.is_enabled('K6') and mt2.is_blocked:
                 hard_conflicts += 1
             elif sks == 4 and mt4 and constraints_loader.is_enabled('K6') and mt4.is_blocked:
@@ -180,7 +193,7 @@ class Schedule:
                     c1_course, c2_course = c1.course, c2.course
                     if constraints_loader.is_enabled('K4') and c1_course.course_type == 3 and c2_course.course_type == 3:
                         if (c1_course.student_group[0] == 2 and c2_course.student_group[0] == 3) or \
-                           (c2_course.student_group[0] == 2 and c1_course.student_group[0] == 3): # <-- FIX 4
+                           (c2_course.student_group[0] == 2 and c1_course.student_group[0] == 3):
                             hard_conflicts += 1
                     if constraints_loader.is_enabled('K5') and c1_course.student_group[0] == 4 and c2_course.student_group[0] == 4 and c1_course.course_type != c2_course.course_type:
                         hard_conflicts += 1
@@ -278,7 +291,7 @@ class DisplayManager:
             table.add_row([
                 str(i + 1),
                 f"{course.name}\n({course.number}, {sks} SKS, {course.max_students} mhs)",
-                f"Tingkat {course.student_group[0]} - Kelas {course.student_group[1]}", # <-- FIX 4
+                f"Tingkat {course.student_group[0]} - Kelas {course.student_group[1]}",
                 f"{current_class.room.number} ({current_class.room.seating_capacity})",
                 current_class.instructor.name,
                 jadwal_str
