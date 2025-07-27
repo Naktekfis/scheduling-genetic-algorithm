@@ -32,7 +32,7 @@ NUMB_OF_ELITE_SCHEDULES = settings.NUMB_OF_ELITE_SCHEDULES
 CROSSOVER_RATE = settings.CROSSOVER_RATE
 MUTATION_RATE = settings.MUTATION_RATE
 
-# LOAD KELAS DATA
+# LOAD DATA
 class Data:
     try:
         ROOMS = pd.read_csv(os.path.join(DATA_DIR, 'Ruangan.csv'), header=None).values.tolist()
@@ -82,22 +82,58 @@ class Schedule:
         self._is_fitness_changed = True
 
     def initialize(self):
+        """
+        Inisialisasi jadwal.
+        Untuk mata kuliah dengan jadwal tetap (is_fixed), alokasikan waktu yang sudah ditentukan.
+        Untuk yang lain, alokasikan secara acak.
+        """
         courses = self._data.get_courses()
+        
+        # Buat tabel pencarian untuk semua MeetingTime agar mudah dicari berdasarkan ID.
+        all_meeting_times = {mt.id: mt for sks in [1, 2, 4] for mt in self._data.get_meeting_times(sks)}
+
         for i, course in enumerate(courses):
             new_class = Class(i, course)
-            new_class.instructor = course.instructors[0]
-            if course.sks == 4:
-                new_class.meeting_times[4] = random.choice(self._data.get_meeting_times(4))
-                new_class.room = Room("Lab Komputer", 45) # Asumsi Lab Komputer ada, bisa dibuat lebih dinamis
+            new_class.instructor = course.instructors[0] # Dosen tetap bisa diacak dari list jika ada >1
+            new_class.room = random.choice(self._data.get_rooms()) # Ruangan masih acak
+
+            # Logika IF/ELSE untuk jadwal tetap vs acak
+            if course.is_fixed:
+                # JIKA JADWAL SUDAH TETAP
+                sks = course.sks
+                fixed_schedule_id = None
+                if sks == 4: fixed_schedule_id = course.fixed_schedule_4jam
+                elif sks == 2: fixed_schedule_id = course.fixed_schedule_2jam
+                elif sks == 1: fixed_schedule_id = course.fixed_schedule_1jam
+                
+                # Cari objek MeetingTime yang sesuai dari ID yang didapat
+                fixed_meeting_time = all_meeting_times.get(fixed_schedule_id)
+                
+                if fixed_meeting_time:
+                    new_class.meeting_times[sks] = fixed_meeting_time
+                else:
+                    # Fallback: Jika ID jadwal tetap tidak valid, acak saja dan beri peringatan
+                    print(f"PERINGATAN: ID Jadwal Tetap '{fixed_schedule_id}' untuk matkul '{course.name}' tidak ditemukan. Menggunakan jadwal acak sebagai gantinya.")
+                    new_class.meeting_times[sks] = random.choice(self._data.get_meeting_times(sks))
+            
             else:
-                new_class.room = random.choice(self._data.get_rooms())
-                if course.sks == 3:
+                # Jika tidak ada jadwal tetap, alokasikan secara acak
+                if course.sks == 4:
+                    new_class.meeting_times[4] = random.choice(self._data.get_meeting_times(4))
+                elif course.sks == 3:
                     new_class.meeting_times[2] = random.choice(self._data.get_meeting_times(2))
                     new_class.meeting_times[1] = random.choice(self._data.get_meeting_times(1))
                 elif course.sks == 2:
                     new_class.meeting_times[2] = random.choice(self._data.get_meeting_times(2))
                 elif course.sks == 1:
                     new_class.meeting_times[1] = random.choice(self._data.get_meeting_times(1))
+            
+            # Atur ruangan Lab Komputer khusus untuk mata kuliah Praktikum (course_type == 3)
+            if course.course_type == 3:
+                lab_room = next((r for r in self._data.get_rooms() if "Lab" in r.number), None)
+                if lab_room:
+                    new_class.room = lab_room
+
             self._classes.append(new_class)
         return self
 
@@ -108,7 +144,6 @@ class Schedule:
         for c in self._classes:
             course, sks, instructor_id, room_num = c.course, c.course.sks, c.instructor.id, c.room.number
             group = course.student_group
-            # <-- FIX 2: Menggunakan .meeting_times.get()
             times = [c.meeting_times.get(s) for s in [1, 2, 4] if c.meeting_times.get(s) is not None]
 
             if constraints_loader.is_enabled('K2') and course.course_type != 3 and c.room.seating_capacity < course.max_students:
