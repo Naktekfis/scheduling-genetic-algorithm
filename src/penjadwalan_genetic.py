@@ -39,7 +39,7 @@ class Data:
         MEETING_TIMES_4JAM = pd.read_csv(os.path.join(DATA_DIR, 'MeetingTime_4jam.csv'), usecols=['Kode','Jadwal','Group1','Blocked'], converters={"Group1":int,"Blocked":int}).values.tolist()
         MEETING_TIMES_2JAM = pd.read_csv(os.path.join(DATA_DIR, 'MeetingTime_2jam.csv'), usecols=['Kode','Jadwal','Group1','Group2','Group3','Blocked'], converters={"Group1":int,"Group2":int,"Group3":int,"Blocked":int}).values.tolist()
         MEETING_TIMES_1JAM = pd.read_csv(os.path.join(DATA_DIR, 'MeetingTime_1jam.csv'), usecols=['Kode','Jadwal','Group1','Group2','Group3','Blocked','WaktuAkhir'], converters={"Group1":int,"Group2":int,"Group3":int,"Blocked":int,"WaktuAkhir":int}).values.tolist()
-        COURSE_DATA = pd.read_csv(os.path.join(DATA_DIR, 'DataPenjadwalan.csv'))
+        COURSE_DATA = pd.read_csv(os.path.join(DATA_DIR, 'DataPenjadwalan2.csv'))
         INSTRUCTORS = COURSE_DATA[['InisialDosen','NamaDosen']].drop_duplicates().values.tolist()
     except FileNotFoundError as e:
         print(f"Error: File tidak ditemukan - {e}.")
@@ -59,7 +59,7 @@ class Data:
         self._instructors = list(instructor_map.values())
         for _, row in self.COURSE_DATA.iterrows():
             dosen_obj = [instructor_map.get(row['InisialDosen'])]
-            self._courses.append(Course(number=row['KodeMatkul'], name=row['NamaMatkul'], sks=row['sks'], instructors=dosen_obj, max_students=row['KuotaMatkul'], student_group=(row['Tingkat'], row['Kelas']), is_fixed=(row['jadwalfix'] == 1), is_difficult=(row['MatkulSusah'] == 1), course_type=row['Tipe'], fixed_schedule_4jam=row['jadwal4jam'], fixed_schedule_2jam=row['jadwal2jam'], fixed_schedule_1jam=row['jadwal1jam']))
+            self._courses.append(Course(number=row['KodeMatkul'], name=row['NamaMatkul'], sks=row['sks'], instructors=dosen_obj, max_students=row['KuotaMatkul'], student_group=(row['Tingkat'], row['Kelas']), is_fixed=(row['jadwalfix'] == 1), is_difficult=(row['MatkulSusah'] == 1), course_type=row['Tipe'], fixed_schedule_4jam=row['jadwal4jam'], fixed_schedule_2jam=row['jadwal2jam'], fixed_schedule_1jam=row['jadwal1jam'], fixed_room=row['ruanganfix']))
         self._number_of_classes = len(self._courses)
 
     def get_rooms(self): return self._rooms
@@ -90,6 +90,7 @@ class Schedule:
         
         # Cari berdasarkan string waktu untuk semua SKS
         all_meeting_times = {mt.time: mt for sks in [1, 2, 4] for mt in self._data.get_meeting_times(sks)}
+        all_rooms = {room.number: room for room in self._data.get_rooms()}
 
         for i, course in enumerate(courses):
             new_class = Class(i, course)
@@ -140,10 +141,24 @@ class Schedule:
                 else:
                     new_class.meeting_times[course.sks] = random.choice(self._data.get_meeting_times(course.sks))
 
-            # LOGIKA PENETAPAN RUANGAN
-            if course.course_type == 3:
+            # --- LOGIKA BARU PENETAPAN RUANGAN (BERPRIORITAS) ---
+            fixed_room_id = course.fixed_room
+            
+            # Prioritas 1: Cek apakah ruangan sudah di-lock
+            if pd.notna(fixed_room_id):
+                room_obj = all_rooms.get(fixed_room_id)
+                if room_obj:
+                    new_class.room = room_obj
+                else:
+                    print(f"PERINGATAN: ID Ruangan Tetap '{fixed_room_id}' untuk matkul '{course.name}' tidak ditemukan. Menggunakan ruangan acak.")
+                    new_class.room = random.choice(self._data.get_rooms())
+            
+            # Prioritas 2: Jika tidak di-lock, cek apakah ini kelas praktikum
+            elif course.course_type == 3:
                 lab_room = next((r for r in self._data.get_rooms() if "Lab" in r.number), None)
                 new_class.room = lab_room if lab_room else random.choice(self._data.get_rooms())
+            
+            # Prioritas 3: Jika bukan keduanya, baru alokasikan secara acak
             else:
                 new_class.room = random.choice(self._data.get_rooms())
 
@@ -252,18 +267,70 @@ class GeneticAlgorithm:
             self._mutate_schedule(population.get_schedules()[i])
         return population
     def _crossover_schedule(self, parent1, parent2):
-        child_schedule = Schedule().initialize()
+        # Buat jadwal anak sebagai salinan dari parent1
+        child_schedule = Schedule()
+        # Salin list kelas dari parent1. Ini lebih efisien.
+        child_schedule._classes = [c for c in parent1.get_classes()]
+
+        # Lakukan crossover untuk setiap gen
         for i in range(len(child_schedule.get_classes())):
-            if random.random() < CROSSOVER_RATE:
-                child_schedule.get_classes()[i] = parent1.get_classes()[i]
-            else:
-                child_schedule.get_classes()[i] = parent2.get_classes()[i]
+            # Hanya lakukan crossover jika gen ini tidak terkunci
+            course = child_schedule.get_classes()[i].course
+            
+            # Cek apakah waktu atau ruangan terkunci
+            is_time_locked = course.is_fixed
+            is_room_locked = pd.notna(course.fixed_room)
+            
+            # Jika kedua-duanya tidak terkunci, baru lakukan crossover
+            if not is_time_locked and not is_room_locked:
+                if random.random() > 0.5: # 50/50 chance untuk mengambil dari parent2
+                    child_schedule.get_classes()[i] = parent2.get_classes()[i]
+            # Jika hanya ruangan yang tidak terkunci, hanya crossover ruangan
+            elif not is_room_locked:
+                if random.random() > 0.5:
+                    child_schedule.get_classes()[i].room = parent2.get_classes()[i].room
+            # Jika hanya waktu yang tidak terkunci, hanya crossover waktu
+            elif not is_time_locked:
+                if random.random() > 0.5:
+                    child_schedule.get_classes()[i].meeting_times = parent2.get_classes()[i].meeting_times
+        child_schedule._is_fitness_changed = True
+
         return child_schedule
     def _mutate_schedule(self, schedule_to_mutate):
-        temp_schedule = Schedule().initialize()
         for i in range(len(schedule_to_mutate.get_classes())):
             if random.random() < MUTATION_RATE:
-                schedule_to_mutate.get_classes()[i] = temp_schedule.get_classes()[i]
+                current_class = schedule_to_mutate.get_classes()[i]
+                course = current_class.course
+
+                # Cek status lock
+                is_time_locked = course.is_fixed
+                is_room_locked = pd.notna(course.fixed_room)
+
+                # Mutasi Waktu (Hanya jika tidak terkunci)
+                if not is_time_locked:
+                    current_class.meeting_times.clear() # Hapus jadwal lama
+                    if course.sks == 3:
+                        current_class.meeting_times[2] = random.choice(data.get_meeting_times(2))
+                        current_class.meeting_times[1] = random.choice(data.get_meeting_times(1))
+                    else:
+                        current_class.meeting_times[course.sks] = random.choice(data.get_meeting_times(course.sks))
+
+                # Mutasi Ruangan (Hanya jika tidak terkunci)
+                if not is_room_locked:
+                    if course.course_type == 3:
+                        # Coba cari Lab, jika tidak ada, pakai ruangan acak
+                        lab_room = next((r for r in data.get_rooms() if "Lab" in r.number), None)
+                        current_class.room = lab_room if lab_room else random.choice(data.get_rooms())
+                    else:
+                        current_class.room = random.choice(data.get_rooms())
+                
+                # Mutasi Dosen (Selalu boleh, karena tidak ada lock untuk dosen)
+                if course.instructors:
+                    current_class.instructor = random.choice(course.instructors)
+                
+                # Tandai bahwa fitness perlu dihitung ulang
+                schedule_to_mutate._is_fitness_changed = True
+                
         return schedule_to_mutate
     def _tournament_selection(self, pop):
         tournament_pop = Population(0)
