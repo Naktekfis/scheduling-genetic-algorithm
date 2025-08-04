@@ -1,7 +1,6 @@
 import os
 import sys
 
-# Menambahkan direktori root proyek ke path agar import berfungsi
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_DIR)
 
@@ -14,7 +13,7 @@ from tqdm import tqdm
 
 from src.constraints.constraints_loader import ConstraintLoader
 from config import settings
-from src.type import Room, Instructor, MeetingTime, Course, Class  # <-- FIX 1: Typo 'types'
+from src.type import Room, Instructor, MeetingTime, Course, Class
 
 # KONFIGURASI DAN PARAMETER UTAMA
 DATA_DIR = os.path.join(BASE_DIR, 'data')
@@ -39,7 +38,7 @@ class Data:
         MEETING_TIMES_4JAM = pd.read_csv(os.path.join(DATA_DIR, 'MeetingTime_4jam.csv'), usecols=['Kode','Jadwal','Group1','Blocked'], converters={"Group1":int,"Blocked":int}).values.tolist()
         MEETING_TIMES_2JAM = pd.read_csv(os.path.join(DATA_DIR, 'MeetingTime_2jam.csv'), usecols=['Kode','Jadwal','Group1','Group2','Group3','Blocked'], converters={"Group1":int,"Group2":int,"Group3":int,"Blocked":int}).values.tolist()
         MEETING_TIMES_1JAM = pd.read_csv(os.path.join(DATA_DIR, 'MeetingTime_1jam.csv'), usecols=['Kode','Jadwal','Group1','Group2','Group3','Blocked','WaktuAkhir'], converters={"Group1":int,"Group2":int,"Group3":int,"Blocked":int,"WaktuAkhir":int}).values.tolist()
-        COURSE_DATA = pd.read_csv(os.path.join(DATA_DIR, 'DataPenjadwalan.csv'))
+        COURSE_DATA = pd.read_csv(os.path.join(DATA_DIR, 'DK_133_TF_Semester3_2025.csv'))
         INSTRUCTORS = COURSE_DATA[['InisialDosen','NamaDosen']].drop_duplicates().values.tolist()
     except FileNotFoundError as e:
         print(f"Error: File tidak ditemukan - {e}.")
@@ -59,7 +58,7 @@ class Data:
         self._instructors = list(instructor_map.values())
         for _, row in self.COURSE_DATA.iterrows():
             dosen_obj = [instructor_map.get(row['InisialDosen'])]
-            self._courses.append(Course(number=row['KodeMatkul'], name=row['NamaMatkul'], sks=row['sks'], instructors=dosen_obj, max_students=row['KuotaMatkul'], student_group=(row['Tingkat'], row['Kelas']), is_fixed=(row['jadwalfix'] == 1), is_difficult=(row['MatkulSusah'] == 1), course_type=row['Tipe'], fixed_schedule_4jam=row['jadwal4jam'], fixed_schedule_2jam=row['jadwal2jam'], fixed_schedule_1jam=row['jadwal1jam']))
+            self._courses.append(Course(number=row['KodeMatkul'], name=row['NamaMatkul'], sks=row['sks'], instructors=dosen_obj, max_students=row['KuotaMatkul'], student_group=(row['Tingkat'], row['no_kelas']), is_fixed=(row['jadwalfix'] == 1), is_difficult=(row['MatkulSusah'] == 1), course_type=row['Tipe'], fixed_schedule_4jam=row['jadwal4jam'], fixed_schedule_2jam=row['jadwal2jam'], fixed_schedule_1jam=row['jadwal1jam']))
         self._number_of_classes = len(self._courses)
 
     def get_rooms(self): return self._rooms
@@ -108,7 +107,6 @@ class Schedule:
         for c in self._classes:
             course, sks, instructor_id, room_num = c.course, c.course.sks, c.instructor.id, c.room.number
             group = course.student_group
-            # <-- FIX 2: Menggunakan .meeting_times.get()
             times = [c.meeting_times.get(s) for s in [1, 2, 4] if c.meeting_times.get(s) is not None]
 
             if constraints_loader.is_enabled('K2') and course.course_type != 3 and c.room.seating_capacity < course.max_students:
@@ -119,9 +117,9 @@ class Schedule:
             mt4 = c.meeting_times.get(4)
 
             if sks == 3 and mt1 and mt2:
-                if constraints_loader.is_enabled('K_internal') and mt2.groups.get('g1') == mt1.groups.get('g1'): hard_conflicts += 1 # <-- FIX 5
+                if constraints_loader.is_enabled('K_internal') and mt2.groups.get('g1') == mt1.groups.get('g1'): hard_conflicts += 1 
                 if (constraints_loader.is_enabled('K6') or constraints_loader.is_enabled('K7')) and (mt2.is_blocked or mt1.is_blocked): hard_conflicts += 1
-                if constraints_loader.is_enabled('L1') and mt1.is_edge_time: soft_conflicts += 1 # <-- FIX 6
+                if constraints_loader.is_enabled('L1') and mt1.is_edge_time: soft_conflicts += 1
             elif sks == 2 and mt2 and constraints_loader.is_enabled('K6') and mt2.is_blocked:
                 hard_conflicts += 1
             elif sks == 4 and mt4 and constraints_loader.is_enabled('K6') and mt4.is_blocked:
@@ -145,7 +143,7 @@ class Schedule:
                     c1_course, c2_course = c1.course, c2.course
                     if constraints_loader.is_enabled('K4') and c1_course.course_type == 3 and c2_course.course_type == 3:
                         if (c1_course.student_group[0] == 2 and c2_course.student_group[0] == 3) or \
-                           (c2_course.student_group[0] == 2 and c1_course.student_group[0] == 3): # <-- FIX 4
+                           (c2_course.student_group[0] == 2 and c1_course.student_group[0] == 3):
                             hard_conflicts += 1
                     if constraints_loader.is_enabled('K5') and c1_course.student_group[0] == 4 and c2_course.student_group[0] == 4 and c1_course.course_type != c2_course.course_type:
                         hard_conflicts += 1
@@ -225,33 +223,86 @@ class GeneticAlgorithm:
         return tournament_pop
 
 class DisplayManager:
+    def _split_schedule_time(self, schedule_string):
+        """
+        Memecah string jadwal menjadi hari dan jam.
+        """
+        try:
+            # Pastikan input adalah string yang valid
+            if not schedule_string or not isinstance(schedule_string, str):
+                return 'N/A', 'N/A'
+            
+            # Memecah string berdasarkan tanda '-'
+            parts = schedule_string.strip().split('-', 1)
+            
+            # Pastikan hasil pemecahan ada 2 bagian (Hari dan Jam)
+            if len(parts) == 2:
+                return parts[0], parts[1]
+            else:
+                # Jika formatnya aneh, tampilkan apa adanya
+                return parts[0], '-'
+                
+        except Exception:
+            # Jika terjadi error apapun, kembalikan nilai default agar tidak crash
+            return 'N/A', 'N/A'
+
     def print_schedule_as_table(self, schedule, generation_number, elapsed_time):
         classes = schedule.get_classes()
-        print(f"\n======================================================================================\n JADWAL KULIAH TERBAIK (Generasi #{generation_number})\n > Fitness: {schedule.get_fitness():.5f}\n > Jumlah Konflik: {schedule.get_num_of_conflicts()}\n > Waktu Komputasi: {elapsed_time:.2f} detik\n======================================================================================")
-        table = prettytable.PrettyTable(['No', 'Mata Kuliah (Kode, SKS, Kuota)', 'Kelompok', 'Ruangan (Kap.)', 'Dosen', 'Jadwal'])
+        print(f"\n================================================================================================================\n JADWAL KULIAH TERBAIK (Generasi #{generation_number})\n > Fitness: {schedule.get_fitness():.5f}\n > Jumlah Konflik: {schedule.get_num_of_conflicts()}\n > Waktu Komputasi: {elapsed_time:.2f} detik\n================================================================================================================")
+        
+        table = prettytable.PrettyTable([
+            'No', 
+            'Mata Kuliah (Kode, SKS, Kuota)', 
+            'Kelompok', 
+            'Ruangan (Kap.)', 
+            'Dosen', 
+            'Hari 1', 
+            'Jam 1', 
+            'Hari 2', 
+            'Jam 2'
+        ])
+        
         for i, current_class in enumerate(classes):
             course, sks = current_class.course, current_class.course.sks
-            # <-- FIX 3: Menggunakan .meeting_times.get() dan .time
+            
+            hari1, jam1, hari2, jam2 = 'N/A', 'N/A', '-', '-'
+
+            mt4 = current_class.meeting_times.get(4)
             mt2 = current_class.meeting_times.get(2)
             mt1 = current_class.meeting_times.get(1)
-            mt4 = current_class.meeting_times.get(4)
-            if sks == 3 and mt1 and mt2: jadwal_str = f"{mt2.time} & {mt1.time}"
-            elif sks == 2 and mt2: jadwal_str = mt2.time
-            elif sks == 4 and mt4: jadwal_str = mt4.time
-            elif sks == 1 and mt1: jadwal_str = mt1.time
-            else: jadwal_str = "N/A"
+
+            if sks == 3 and mt2 and mt1:
+                # Kasus 3 SKS: Proses dua jadwal terpisah
+                if mt2.time:
+                    hari1, jam1 = self._split_schedule_time(mt2.time)
+                if mt1.time:
+                    hari2, jam2 = self._split_schedule_time(mt1.time)
+            
+            # Kasus sesi tunggal
+            elif sks == 2 and mt2 and mt2.time:
+                hari1, jam1 = self._split_schedule_time(mt2.time)
+            elif sks == 4 and mt4 and mt4.time:
+                hari1, jam1 = self._split_schedule_time(mt4.time)
+            elif sks == 1 and mt1 and mt1.time:
+                hari1, jam1 = self._split_schedule_time(mt1.time)
+            
             table.add_row([
                 str(i + 1),
                 f"{course.name}\n({course.number}, {sks} SKS, {course.max_students} mhs)",
-                f"Tingkat {course.student_group[0]} - Kelas {course.student_group[1]}", # <-- FIX 4
+                f"Tingkat {course.student_group[0]} - Kelas {course.student_group[1]}",
                 f"{current_class.room.number} ({current_class.room.seating_capacity})",
                 current_class.instructor.name,
-                jadwal_str
+                hari1,
+                jam1,
+                hari2,
+                jam2
             ])
+            
         print(table)
+        
         df = pd.DataFrame(table.rows, columns=table.field_names)
-        df.to_csv("Jadwal_Final_Optimal.csv", index=False)
-        print("\nJadwal optimal telah disimpan ke file 'Jadwal_Final_Optimal.csv'")
+        df.to_csv("Jadwal_Final_Optimal2.csv", index=False)
+        print("\nJadwal optimal telah disimpan ke file 'Jadwal_Final_Optimal2.csv'")
 
 # MAIN EXECUTION BLOCK
 if __name__ == '__main__':
