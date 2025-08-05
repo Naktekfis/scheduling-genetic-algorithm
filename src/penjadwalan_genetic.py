@@ -9,11 +9,13 @@ import prettytable
 import random
 import pandas as pd
 import time
+import re
 from tqdm import tqdm
-
+from src.type.time_slot_mapper import TimeSlotMapper
 from src.constraints.constraints_loader import ConstraintLoader
 from config import settings
 from src.type import Room, Instructor, MeetingTime, Course, Class
+
 
 # KONFIGURASI DAN PARAMETER UTAMA
 DATA_DIR = os.path.join(BASE_DIR, 'data')
@@ -34,32 +36,94 @@ MUTATION_RATE = settings.MUTATION_RATE
 # LOAD KELAS DATA
 class Data:
     try:
+        DATA_PENJADWALAN_FILE = 'DK_133_TF_Semester3_2025.csv'
+        
         ROOMS = pd.read_csv(os.path.join(DATA_DIR, 'Ruangan.csv'), header=None).values.tolist()
         MEETING_TIMES_4JAM = pd.read_csv(os.path.join(DATA_DIR, 'MeetingTime_4jam.csv'), usecols=['Kode','Jadwal','Group1','Blocked'], converters={"Group1":int,"Blocked":int}).values.tolist()
         MEETING_TIMES_2JAM = pd.read_csv(os.path.join(DATA_DIR, 'MeetingTime_2jam.csv'), usecols=['Kode','Jadwal','Group1','Group2','Group3','Blocked'], converters={"Group1":int,"Group2":int,"Group3":int,"Blocked":int}).values.tolist()
         MEETING_TIMES_1JAM = pd.read_csv(os.path.join(DATA_DIR, 'MeetingTime_1jam.csv'), usecols=['Kode','Jadwal','Group1','Group2','Group3','Blocked','WaktuAkhir'], converters={"Group1":int,"Group2":int,"Group3":int,"Blocked":int,"WaktuAkhir":int}).values.tolist()
-        COURSE_DATA = pd.read_csv(os.path.join(DATA_DIR, 'DK_133_TF_Semester3_2025.csv'))
-        INSTRUCTORS = COURSE_DATA[['InisialDosen','NamaDosen']].drop_duplicates().values.tolist()
+        
+        if not os.path.exists(os.path.join(DATA_DIR, DATA_PENJADWALAN_FILE)):
+             raise FileNotFoundError(f"File '{DATA_PENJADWALAN_FILE}' tidak ditemukan di folder 'data/'.")
+        COURSE_DATA = pd.read_csv(os.path.join(DATA_DIR, DATA_PENJADWALAN_FILE))
+        
     except FileNotFoundError as e:
-        print(f"Error: File tidak ditemukan - {e}.")
-        exit()
+        print(f"Error: File tidak ditemukan - {e}")
+        sys.exit()
 
     def __init__(self):
         self._rooms, self._meeting_times_4jam, self._meeting_times_2jam, self._meeting_times_1jam, self._instructors, self._courses = [], [], [], [], [], []
-        for num, cap in self.ROOMS:
-            self._rooms.append(Room(number=num, seating_capacity=int(cap)))
-        for mt in self.MEETING_TIMES_4JAM:
-            self._meeting_times_4jam.append(MeetingTime(id=mt[0], time=mt[1], sks=4, groups={'g1': mt[2]}, is_blocked=(mt[3]==1), is_edge_time=False))
-        for mt in self.MEETING_TIMES_2JAM:
-            self._meeting_times_2jam.append(MeetingTime(id=mt[0], time=mt[1], sks=2, groups={'g1': mt[2], 'g2': mt[3], 'g3': mt[4]}, is_blocked=(mt[5]==1), is_edge_time=False))
-        for mt in self.MEETING_TIMES_1JAM:
-            self._meeting_times_1jam.append(MeetingTime(id=mt[0], time=mt[1], sks=1, groups={'g1': mt[2], 'g2': mt[3], 'g3': mt[4]}, is_blocked=(mt[5]==1), is_edge_time=(mt[6]==1)))
-        instructor_map = {ins[0]: Instructor(id=ins[0], name=ins[1]) for ins in self.INSTRUCTORS}
-        self._instructors = list(instructor_map.values())
+        
+        for num, cap in self.ROOMS: self._rooms.append(Room(number=num, seating_capacity=int(cap)))
+        for mt in self.MEETING_TIMES_4JAM: self._meeting_times_4jam.append(MeetingTime(id=mt[0], time=mt[1], sks=4, groups={'g1': mt[2]}, is_blocked=(mt[3]==1), is_edge_time=False))
+        for mt in self.MEETING_TIMES_2JAM: self._meeting_times_2jam.append(MeetingTime(id=mt[0], time=mt[1], sks=2, groups={'g1': mt[2], 'g2': mt[3], 'g3': mt[4]}, is_blocked=(mt[5]==1), is_edge_time=False))
+        for mt in self.MEETING_TIMES_1JAM: self._meeting_times_1jam.append(MeetingTime(id=mt[0], time=mt[1], sks=1, groups={'g1': mt[2], 'g2': mt[3], 'g3': mt[4]}, is_blocked=(mt[5]==1), is_edge_time=(mt[6]==1)))
+        
+        instructor_map = {}
+        
+        # Iterasi melalui setiap baris data mentah untuk membangun daftar dosen unik
         for _, row in self.COURSE_DATA.iterrows():
-            dosen_obj = [instructor_map.get(row['InisialDosen'])]
-            self._courses.append(Course(number=row['KodeMatkul'], name=row['NamaMatkul'], sks=row['sks'], instructors=dosen_obj, max_students=row['KuotaMatkul'], student_group=(row['Tingkat'], row['no_kelas']), is_fixed=(row['jadwalfix'] == 1), is_difficult=(row['MatkulSusah'] == 1), course_type=row['Tipe'], fixed_schedule_4jam=row['jadwal4jam'], fixed_schedule_2jam=row['jadwal2jam'], fixed_schedule_1jam=row['jadwal1jam']))
+            # Pastikan data berupa string sebelum di-split
+            raw_initials = str(row['InisialDosen']).strip()
+            raw_names = str(row['NamaDosen']).strip()
+            
+            # Memecah string berdasarkan koma atau baris baru
+            initials = [i.strip() for i in raw_initials.replace('\n', ',').split(',') if i.strip()]
+            names = [n.strip() for n in raw_names.split('\n') if n.strip()]
+
+            # Menangani kasus dimana nama dan inisial tidak cocok jumlahnya
+            # Kita akan prioritaskan inisial
+            if len(initials) == len(names):
+                for i in range(len(initials)):
+                    initial = initials[i]
+                    name = names[i]
+                    if initial not in instructor_map:
+                        instructor_map[initial] = Instructor(id=initial, name=name)
+            else:
+                # Jika jumlah tidak cocok, kita coba pasangkan yang ada. Ini adalah fallback.
+                # Untuk kasus sederhana (1 dosen), ini akan bekerja.
+                if len(initials) == 1 and len(names) == 1:
+                     if initials[0] not in instructor_map:
+                        instructor_map[initials[0]] = Instructor(id=initials[0], name=names[0])
+        
+        self._instructors = list(instructor_map.values())
+        
+        # Iterasi lagi untuk membuat objek Course dengan referensi Dosen yang benar
+        for _, row in self.COURSE_DATA.iterrows():
+            raw_initials = str(row['InisialDosen']).strip()
+            initials_for_this_course = [i.strip() for i in raw_initials.replace('\n', ',').split(',') if i.strip()]
+            
+            # Cari objek dosen yang sesuai dari instructor_map
+            dosen_objects = [instructor_map[initial] for initial in initials_for_this_course if initial in instructor_map]
+            
+            # Jika tidak ada dosen yang ditemukan untuk matkul ini, skip atau beri peringatan
+            if not dosen_objects:
+                print(f"Peringatan: Tidak ada dosen yang ditemukan untuk mata kuliah {row['KodeMatkul']}. Melanjutkan tanpa dosen.")
+                continue
+                
+            self._courses.append(Course(
+                number=row['KodeMatkul'], 
+                name=row['NamaMatkul'], 
+                sks=row['sks'], 
+                instructors=dosen_objects,
+                max_students=row['KuotaMatkul'], 
+                student_group=(row['Tingkat'], row['no_kelas']), 
+                is_fixed=(row.get('jadwalfix', 0) == 1), 
+                is_difficult=(row.get('MatkulSusah', 0) == 1), 
+                course_type=row.get('Tipe', 1), 
+                fixed_schedule_4jam=row.get('jadwal4jam'), 
+                fixed_schedule_2jam=row.get('jadwal2jam'), 
+                fixed_schedule_1jam=row.get('jadwal1jam')
+            ))
+
         self._number_of_classes = len(self._courses)
+
+        # Inisialisasi TimeSlotMapper
+        self._time_slot_mapper = TimeSlotMapper(
+            self._meeting_times_1jam, 
+            self._meeting_times_2jam, 
+            self._meeting_times_4jam
+        )
 
     def get_rooms(self): return self._rooms
     def get_instructors(self): return self._instructors
@@ -70,7 +134,7 @@ class Data:
         if sks == 1: return self._meeting_times_1jam
         return []
     def get_number_of_classes(self): return self._number_of_classes
-
+    def get_time_slot_mapper(self): return self._time_slot_mapper
 # KELAS UTAMA UNTUK ALGORITMA GENETIKA
 class Schedule:
     def __init__(self):
@@ -86,8 +150,9 @@ class Schedule:
             new_class = Class(i, course)
             new_class.instructor = course.instructors[0]
             if course.sks == 4:
+                lab_room = next((r for r in self._data.get_rooms() if "Lab" in r.number), random.choice(self._data.get_rooms()))
+                new_class.room = lab_room
                 new_class.meeting_times[4] = random.choice(self._data.get_meeting_times(4))
-                new_class.room = Room("Lab Komputer", 45) # Asumsi Lab Komputer ada, bisa dibuat lebih dinamis
             else:
                 new_class.room = random.choice(self._data.get_rooms())
                 if course.sks == 3:
@@ -100,15 +165,40 @@ class Schedule:
             self._classes.append(new_class)
         return self
 
+    # =======================================================================================
+    # === PERUBAHAN UTAMA: MENGGANTI ISI 'check_time_overlap' DENGAN SISTEM BOOKING/MAPPER ===
+    # =======================================================================================
+    def check_time_overlap(self, c1, c2):
+        time_mapper = self._data.get_time_slot_mapper()
+
+        # Dapatkan semua slot 1 jam untuk kelas pertama
+        c1_slots = set()
+        for mt in c1.meeting_times.values():
+            if mt:
+                c1_slots.update(time_mapper.get_1hr_slots(mt.id))
+        
+        # Dapatkan semua slot 1 jam untuk kelas kedua
+        c2_slots = set()
+        for mt in c2.meeting_times.values():
+            if mt:
+                c2_slots.update(time_mapper.get_1hr_slots(mt.id))
+        
+        # Jika ada irisan (intersection) antara dua set slot, berarti ada overlap
+        return not c1_slots.isdisjoint(c2_slots)
+
+    # ================================================================================
+    # === FUNGSI INI DIKEMBALIKAN KE VERSI AWAL ANDA, TAPI SEKARANG MEMANGGIL      ===
+    # === 'check_time_overlap' YANG SUDAH "PINTAR"                                 ===
+    # ================================================================================
     def calculate_fitness(self):
         hard_conflicts, soft_conflicts = 0, 0
         dosen_times, room_times, group_times = {}, {}, {}
 
+        # Loop pertama untuk konflik individu (non-overlap)
         for c in self._classes:
-            course, sks, instructor_id, room_num = c.course, c.course.sks, c.instructor.id, c.room.number
-            group = course.student_group
-            times = [c.meeting_times.get(s) for s in [1, 2, 4] if c.meeting_times.get(s) is not None]
-
+            course, sks = c.course, c.course.sks
+            
+            # [K2] Konflik kapasitas ruangan
             if constraints_loader.is_enabled('K2') and course.course_type != 3 and c.room.seating_capacity < course.max_students:
                 hard_conflicts += 1
             
@@ -116,58 +206,47 @@ class Schedule:
             mt1 = c.meeting_times.get(1)
             mt4 = c.meeting_times.get(4)
 
+            # [K_internal, K6, K7, L1] Konflik internal 3 SKS, waktu terlarang, dan waktu tepi
             if sks == 3 and mt1 and mt2:
                 if constraints_loader.is_enabled('K_internal') and mt2.groups.get('g1') == mt1.groups.get('g1'): hard_conflicts += 1 
                 if (constraints_loader.is_enabled('K6') or constraints_loader.is_enabled('K7')) and (mt2.is_blocked or mt1.is_blocked): hard_conflicts += 1
                 if constraints_loader.is_enabled('L1') and mt1.is_edge_time: soft_conflicts += 1
-            elif sks == 2 and mt2 and constraints_loader.is_enabled('K6') and mt2.is_blocked:
+            elif sks == 2 and mt2 and (constraints_loader.is_enabled('K6') or constraints_loader.is_enabled('K7')) and mt2.is_blocked:
                 hard_conflicts += 1
-            elif sks == 4 and mt4 and constraints_loader.is_enabled('K6') and mt4.is_blocked:
+            elif sks == 4 and mt4 and (constraints_loader.is_enabled('K6') or constraints_loader.is_enabled('K7')) and mt4.is_blocked:
                 hard_conflicts += 1
 
-            for t in times:
-                if constraints_loader.is_enabled('K3'):
-                    if (instructor_id, t.id) in dosen_times: hard_conflicts += 1
-                    else: dosen_times[(instructor_id, t.id)] = c
-                if constraints_loader.is_enabled('K_internal'):
-                    if (room_num, t.id) in room_times: hard_conflicts += 1
-                    else: room_times[(room_num, t.id)] = c
-                if constraints_loader.is_enabled('K1'):
-                    if (group, t.id) in group_times: hard_conflicts += 1
-                    else: group_times[(group, t.id)] = c
-
+        # Loop kedua (O^n2) untuk konflik overlap antar kelas
         for i in range(len(self._classes)):
             for j in range(i + 1, len(self._classes)):
                 c1, c2 = self._classes[i], self._classes[j]
+                
+                # Gunakan check_time_overlap yang baru
                 if self.check_time_overlap(c1, c2):
+                    # Jika ada overlap waktu, cek konflik lainnya
+                    
+                    # [K1, K3, K_internal] Bentrok Grup, Dosen, dan Ruangan
+                    if constraints_loader.is_enabled('K1') and c1.course.student_group == c2.course.student_group:
+                        hard_conflicts += 1
+                    if constraints_loader.is_enabled('K3') and c1.instructor == c2.instructor:
+                        hard_conflicts += 1
+                    if constraints_loader.is_enabled('K_internal') and c1.room == c2.room:
+                        hard_conflicts += 1
+
+                    # Konflik lain yang bergantung pada overlap
                     c1_course, c2_course = c1.course, c2.course
                     if constraints_loader.is_enabled('K4') and c1_course.course_type == 3 and c2_course.course_type == 3:
-                        if (c1_course.student_group[0] == 2 and c2_course.student_group[0] == 3) or \
-                           (c2_course.student_group[0] == 2 and c1_course.student_group[0] == 3):
+                        if {c1_course.student_group[0], c2_course.student_group[0]} == {2, 3}:
                             hard_conflicts += 1
                     if constraints_loader.is_enabled('K5') and c1_course.student_group[0] == 4 and c2_course.student_group[0] == 4 and c1_course.course_type != c2_course.course_type:
                         hard_conflicts += 1
                     if constraints_loader.is_enabled('L2') and c1_course.is_difficult and c2_course.is_difficult:
-                        if (c1_course.student_group[0] == 2 and c2_course.student_group[0] == 3) or \
-                           (c2_course.student_group[0] == 2 and c1_course.student_group[0] == 3):
+                        if {c1_course.student_group[0], c2_course.student_group[0]} == {2, 3}:
                             soft_conflicts += 1
         
         self._num_of_conflicts = hard_conflicts + soft_conflicts
         return 1 / (self._num_of_conflicts + 1)
     
-    def check_time_overlap(self, c1, c2):
-        c1_times = [c1.meeting_times.get(sks) for sks in [1, 2, 4] if c1.meeting_times.get(sks) is not None]
-        c2_times = [c2.meeting_times.get(sks) for sks in [1, 2, 4] if c2.meeting_times.get(sks) is not None]
-        for t1 in c1_times:
-            for t2 in c2_times:
-                if t1.id == t2.id: return True
-                if t1.sks == 4 or t2.sks == 4:
-                    if t1.groups.get('g1') == t2.groups.get('g3'): return True
-                    if t2.groups.get('g1') == t1.groups.get('g3'): return True
-                if t1.sks != 4 and t2.sks != 4:
-                    if t1.groups.get('g2') == t2.groups.get('g2'): return True
-        return False
-
     def get_fitness(self):
         if self._is_fitness_changed:
             self._fitness = self.calculate_fitness()
