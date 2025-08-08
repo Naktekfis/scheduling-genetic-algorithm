@@ -40,13 +40,13 @@ scheduling-genetic-algorithm/
 
 ## Instalasi dan Penggunaan
 
-**1. Persiapan Lingkungan**
+**1. Environment**
 
 Disarankan untuk menggunakan virtual environment.
 
 ```bash
 # Clone repository
-git clone <URL_REPOSITORY_ANDA>
+git clone https://github.com/Naktekfis/scheduling-genetic-algorithm/tree/master
 cd scheduling-genetic-algorithm
 
 # Buat dan aktifkan venv
