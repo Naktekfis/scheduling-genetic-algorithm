@@ -73,10 +73,10 @@ Pastikan Anda berada di direktori root proyek dan virtual environment aktif.
 python src/penjadwalan_genetic.py
 ```
 
-Proses akan berjalan di terminal, menampilkan progres skor dan rincian konflik. Hasil akhir akan ditampilkan di konsol dan disimpan dalam file `Jadwal_Final_Optimal3.csv`.
+Proses akan berjalan di terminal, menampilkan progres skor dan rincian konflik. Hasil akhir akan ditampilkan di console dan disimpan dalam file `Jadwal_Final_Optimal3.csv`.
 
 ## Catatan Implementasi
 
--   **Kualitas Solusi**: Kualitas jadwal yang dihasilkan sangat bergantung pada kualitas data input dan konfigurasi constraint yang digunakan. Algoritma ini bertujuan untuk menemukan solusi "cukup baik" yang meminimalkan konflik, bukan menjamin solusi "sempurna" tanpa konflik sama sekali.
+-   **Kualitas Solusi**: Kualitas jadwal yang dihasilkan sangat bergantung pada kualitas data input dan konfigurasi constraint yang digunakan. Algoritma ini bertujuan untuk menemukan solusi "cukup baik" yang meminimalkan konflik, **bukan menjamin solusi sempurna** tanpa konflik sama sekali.
 -   **Performa**: Operator crossover telah dioptimalkan untuk kecepatan. Namun, ukuran populasi yang besar dan jumlah generasi yang tinggi secara alami akan meningkatkan waktu komputasi.
 -   **Keterbatasan**: Sistem saat ini belum menangani beberapa skenario yang sangat kompleks seperti dependensi antar mata kuliah (prasyarat) atau optimasi jarak antar gedung. Penambahan fitur tersebut memerlukan modifikasi pada struktur data dan fungsi fitness.
