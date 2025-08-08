@@ -2,9 +2,9 @@
 
 Proyek ini adalah sebuah implementasi Algoritma Genetika (GA) yang bertujuan untuk mencari solusi penjadwalan mata kuliah. Sistem ini mencoba menyeimbangkan berbagai batasan (*constraints*) untuk menghasilkan jadwal yang fungsional dan memiliki sesedikit mungkin konflik.
 
-## Fungsionalitas Inti
+## Fitur Inti
 
--   **Pencarian Berbasis GA**: Menggunakan pendekatan evolusioner (seleksi, crossover, mutasi) untuk menavigasi ruang pencarian jadwal yang sangat besar.
+-   **Pencarian Berbasis GA**: Menggunakan pendekatan evolusioner (seleksi, crossover, mutasi) untuk mengeksplorasi ruang pencarian jadwal yang sangat luas.
 -   **Sistem Penilaian Konflik**: Kualitas sebuah jadwal diukur berdasarkan sistem skor. Pelanggaran aturan dibagi menjadi dua kategori:
     -   **Hard Constraints**: Pelanggaran fatal yang harus dihilangkan (misal: bentrok jadwal dosen). Diberi bobot penalti yang sangat tinggi.
     -   **Soft Constraints**: Pelanggaran preferensi yang sebaiknya dihindari (misal: dosen mengajar lebih dari 4 hari). Diberi bobot penalti rendah.
