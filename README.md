@@ -1,85 +1,82 @@
-# Algoritma Genetika untuk Penjadwalan Kuliah
+# Implementasi Algoritma Genetika untuk Penjadwalan Kuliah
 
-Proyek ini mengimplementasikan Algoritma Genetika untuk menyelesaikan masalah penjadwalan kuliah yang kompleks. Tujuannya adalah untuk menghasilkan jadwal yang optimal dengan meminimalkan konflik berdasarkan serangkaian aturan (constraints) yang dapat dikustomisasi.
+Proyek ini adalah sebuah implementasi Algoritma Genetika (GA) yang bertujuan untuk mencari solusi penjadwalan mata kuliah. Sistem ini mencoba menyeimbangkan berbagai batasan (*constraints*) untuk menghasilkan jadwal yang fungsional dan memiliki sesedikit mungkin konflik.
 
-## Fitur Utama
+## Fungsionalitas Inti
 
--   **Optimasi Berbasis Algoritma Genetika**: Menggunakan proses evolusi (seleksi, crossover, mutasi) untuk mencari solusi terbaik.
--   **Konfigurasi Terpusat**: Parameter utama algoritma (ukuran populasi, laju mutasi, dll.) diatur dalam satu file konfigurasi agar mudah diubah.
--   **Aturan yang Dapat Dikustomisasi**: Aturan penjadwalan (constraints) dimuat dari file CSV eksternal, memungkinkan pengguna untuk mengaktifkan/menonaktifkan aturan tanpa mengubah kode.
--   **Struktur Kode Modular**: Kode diorganisir ke dalam modul-modul terpisah untuk data, logika, dan konfigurasi, membuatnya lebih mudah dipelihara dan dikembangkan.
+-   **Pencarian Berbasis GA**: Menggunakan pendekatan evolusioner (seleksi, crossover, mutasi) untuk menavigasi ruang pencarian jadwal yang sangat besar.
+-   **Sistem Penilaian Konflik**: Kualitas sebuah jadwal diukur berdasarkan sistem skor. Pelanggaran aturan dibagi menjadi dua kategori:
+    -   **Hard Constraints**: Pelanggaran fatal yang harus dihilangkan (misal: bentrok jadwal dosen). Diberi bobot penalti yang sangat tinggi.
+    -   **Soft Constraints**: Pelanggaran preferensi yang sebaiknya dihindari (misal: dosen mengajar lebih dari 4 hari). Diberi bobot penalti rendah.
+-   **Berhenti dengan Ambang Batas**: Algoritma dapat diatur untuk berhenti lebih awal jika ditemukan solusi yang sudah memenuhi semua *hard constraint* dan memiliki jumlah skor dari *soft constraint* di bawah ambang batas yang ditentukan.
+-   **Konfigurasi Eksternal**:
+    -   Parameter GA (ukuran populasi, laju mutasi, dll.) diatur di `config/settings.py`.
+    -   Aturan penjadwalan dapat diaktifkan atau dinonaktifkan melalui file `data/Constraints.csv`.
+-   **Penanganan Logika Penjadwalan**:
+    -   Mendukung penugasan dosen dari beberapa alternatif yang valid untuk satu mata kuliah.
+    -   Menggunakan operator Crossover (swap-based) yang dirancang untuk menjaga integritas jadwal (tidak ada kelas yang hilang atau terduplikasi).
 
 ## Struktur Proyek
 
-Struktur proyek telah diorganisir untuk memisahkan antara logika, data, dan konfigurasi.
+Proyek ini diorganisir untuk memisahkan logika, data, dan konfigurasi.
 
 ```
 scheduling-genetic-algorithm/
 ├── config/
-│   └── settings.py               # File konfigurasi untuk parameter algoritma
+│   └── settings.py               # Pengaturan parameter utama GA.
 ├── data/
-│   ├── Constraints.csv           # Daftar aturan penjadwalan (bisa diaktifkan/dinonaktifkan)
-│   ├── DataPenjadwalan.csv       # Data utama mata kuliah, dosen, dan kuota
-│   ├── MeetingTime_1jam.csv      # Slot waktu untuk kelas 1 SKS
-│   ├── MeetingTime_2jam.csv      # Slot waktu untuk kelas 2 SKS
-│   ├── MeetingTime_4jam.csv      # Slot waktu untuk kelas 4 SKS
-│   └── Ruangan.csv               # Data ruangan yang tersedia beserta kapasitasnya
+│   ├── Constraints.csv           # Daftar aturan penjadwalan.
+│   ├── DK_133_TF_Semester3_2025.csv # Data sumber mata kuliah, dosen, dll.
+│   ├── MeetingTime_*.csv         # Definisi slot waktu.
+│   └── Ruangan.csv               # Daftar ruangan dan kapasitas.
 ├── src/
-│   ├── __init__.py               # (Bisa ditambahkan agar src menjadi package)
-│   ├── penjadwalan_genetic.py    # Skrip utama untuk menjalankan algoritma
-│   ├── constraints/
-│   │   └── constraints_loader.py # Logika untuk memuat aturan dari Constraints.csv
+│   ├── penjadwalan_genetic.py    # Skrip eksekusi utama.
 │   └── types/
-│       └── __init__.py           # Definisi tipe data/objek (Course, Room, Instructor, dll.)
-├── other/
-│   └── penjadwalan_genetic_adaptif.py # (Eksperimental) Algoritma adaptif
-├── .gitignore                    # Mengabaikan file yang tidak perlu di-commit
-├── requirements.txt              # Daftar dependensi Python yang dibutuhkan
-└── README.md                     # Dokumentasi ini
+│       └── __init__.py           # Definisi dataclass (Course, Room, dll.).
+├── .gitignore
+├── requirements.txt
+└── README.md
 ```
 
-## Langkah Instalasi
+## Instalasi dan Penggunaan
 
-1.  **Clone Repository**
-    ```bash
-    git clone <https://github.com/Naktekfis/scheduling-genetic-algorithm/tree/master>
-    cd scheduling-genetic-algorithm
-    ```
+**1. Persiapan Lingkungan**
 
-2.  **Buat dan Aktifkan Virtual Environment**
-    ```bash
-    # Membuat virtual environment
-    python -m venv .venv
+Disarankan untuk menggunakan virtual environment.
 
-    # Mengaktifkan di Windows
-    .\.venv\Scripts\activate
+```bash
+# Clone repository
+git clone <URL_REPOSITORY_ANDA>
+cd scheduling-genetic-algorithm
 
-    # Mengaktifkan di macOS/Linux
-    source .venv/bin/activate
-    ```
+# Buat dan aktifkan venv
+python -m venv venv
+source venv/bin/activate  # atau .\venv\Scripts\activate di Windows
+```
 
-3.  **Instal Dependensi**
-    Pastikan virtual environment Anda sudah aktif, lalu jalankan:
-    ```bash
-    pip install -r requirements.txt
-    ```
+**2. Instal Dependensi**
 
-## Konfigurasi
+```bash
+pip install -r requirements.txt
+```
 
-Sebelum menjalankan, Anda dapat menyesuaikan parameter algoritma dan aturan penjadwalan:
+**3. Konfigurasi (Opsional)**
 
-1.  **Parameter Algoritma**: Buka file `config/settings.py` untuk mengubah nilai seperti `POPULATION_SIZE`, `MAX_GENERATION`, `CROSSOVER_RATE`, dan `MUTATION_RATE`.
+-   Sesuaikan parameter seperti `POPULATION_SIZE` atau `SCORE_THRESHOLD` di `config/settings.py`.
+-   Atur `enabled` (1 atau 0) untuk setiap aturan di `data/Constraints.csv`.
 
-2.  **Aturan Penjadwalan**: Buka file `data/Constraints.csv`. Ubah nilai di kolom `enabled` menjadi `1` untuk mengaktifkan aturan atau `0` untuk menonaktifkannya.
+**4. Menjalankan Algoritma**
 
-## Cara Penggunaan
-
-Untuk menjalankan algoritma penjadwalan, pastikan Anda berada di direktori root proyek (`scheduling-genetic-algorithm/`) dan virtual environment sudah aktif.
-
-Gunakan perintah berikut:
+Pastikan Anda berada di direktori root proyek dan virtual environment aktif.
 
 ```bash
 python src/penjadwalan_genetic.py
 ```
 
-Algoritma akan berjalan, menampilkan progress bar evolusi di terminal. Setelah selesai, jadwal terbaik akan ditampilkan dalam bentuk tabel dan juga disimpan ke dalam file `Jadwal_Final_Optimal.csv`.
+Proses akan berjalan di terminal, menampilkan progres skor dan rincian konflik. Hasil akhir akan ditampilkan di konsol dan disimpan dalam file `Jadwal_Final_Optimal3.csv`.
+
+## Catatan Implementasi
+
+-   **Kualitas Solusi**: Kualitas jadwal yang dihasilkan sangat bergantung pada kualitas data input dan konfigurasi constraint yang digunakan. Algoritma ini bertujuan untuk menemukan solusi "cukup baik" yang meminimalkan konflik, bukan menjamin solusi "sempurna" tanpa konflik sama sekali.
+-   **Performa**: Operator crossover telah dioptimalkan untuk kecepatan. Namun, ukuran populasi yang besar dan jumlah generasi yang tinggi secara alami akan meningkatkan waktu komputasi.
+-   **Keterbatasan**: Sistem saat ini belum menangani beberapa skenario yang sangat kompleks seperti dependensi antar mata kuliah (prasyarat) atau optimasi jarak antar gedung. Penambahan fitur tersebut memerlukan modifikasi pada struktur data dan fungsi fitness.
