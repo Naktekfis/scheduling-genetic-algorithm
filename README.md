@@ -46,7 +46,7 @@ Disarankan untuk menggunakan virtual environment.
 
 ```bash
 # Clone repository
-git clone https://github.com/Naktekfis/scheduling-genetic-algorithm/tree/master
+git clone https://github.com/Naktekfis/scheduling-genetic-algorithm
 cd scheduling-genetic-algorithm
 
 # Buat dan aktifkan venv
