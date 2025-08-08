@@ -1,11 +1,15 @@
 ConstraintID,Type,Description,Enabled
-K1,hard,Kelompok mahasiswa yang sama tidak boleh punya jadwal bentrok,1
-K2,hard,Kapasitas ruangan harus mencukupi (kecuali praktikum),1
-K3,hard,Dosen yang sama tidak boleh mengajar di waktu yang sama,1
-K4,hard,Praktikum (4 SKS) tingkat 2 tidak boleh bentrok dengan jadwal tingkat 3,1
-K5,hard,Mata kuliah wajib tingkat 4 tidak boleh bentrok dengan mata kuliah pilihan tingkat 4,1
-K6,hard,Slot waktu tidak boleh digunakan (blocked),1
-K7,hard,Jadwal sudah fix,1
-K8,hard,Jadwal 2 SKS dan 1 SKS untuk matkul 3 SKS tidak boleh di hari yang sama,1
-L1,soft,Jadwal 1 SKS tidak boleh di awal/akhir hari,1
-L2,soft,Mata kuliah sulit tingkat 2 tidak boleh bentrok dengan jadwal tingkat 3,1
+K1,hard,Kelompok mahasiswa yang sama tidak boleh punya jadwal bentrok.,1
+K2,hard,Kapasitas ruangan harus mencukupi (kecuali praktikum).,1
+K3,hard,Dosen yang sama tidak boleh mengajar di waktu yang sama.,1
+K4,hard,Praktikum (Tipe 3) tingkat 2 tidak boleh bentrok dengan jadwal tingkat 3.,1
+K5,hard,Mata kuliah wajib (Tipe 1) tingkat 4 tidak boleh bentrok dengan mata kuliah pilihan (Tipe 2) tingkat 4.,1
+K6,hard,Slot waktu tidak boleh digunakan karena terlarang (misal: Jumat siang. rapat dosen).,1
+K7,hard,Jadwal yang sudah ditetapkan (fixed) tidak boleh diubah (ditangani di inisialisasi/mutasi).,1
+K8,hard,Jadwal 2 SKS dan 1 SKS untuk matkul 3 SKS tidak boleh di hari yang sama.,1
+K9,hard,Dosen tidak boleh mengajar lebih dari 5 jam dalam satu hari.,1
+K10,hard,Mahasiswa tidak boleh kuliah lebih dari 6 jam dalam satu hari.,1
+L1,soft,Jadwal 1 SKS tidak boleh di awal atau akhir hari (waktu tepi).,1
+L2,soft,Mata kuliah sulit tingkat 2 tidak boleh bentrok dengan jadwal tingkat 3.,1
+L3,soft,Mahasiswa tidak boleh memiliki lebih dari 2 kelas berturut-turut tanpa jeda.,1
+L4,soft,Dosen sebaiknya memiliki hari libur (mengajar maks 4 hari/minggu).,1

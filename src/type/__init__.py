@@ -49,6 +49,9 @@ class Course:
     fixed_schedule_4jam: Optional[str]
     fixed_schedule_2jam: Optional[str]
     fixed_schedule_1jam: Optional[str]
+    fixed_room_4jam: Optional[str] = None
+    fixed_room_2jam: Optional[str] = None
+    fixed_room_1jam: Optional[str] = None
 
     def __str__(self) -> str:
         return f"{self.name} ({self.number})"
