@@ -11,6 +11,7 @@ import pandas as pd
 import time
 import re
 import copy
+import numpy as np
 from tqdm import tqdm
 from src.type.time_slot_mapper import TimeSlotMapper
 from src.constraints.constraints_loader import ConstraintLoader
@@ -35,7 +36,6 @@ CROSSOVER_RATE = settings.CROSSOVER_RATE
 MUTATION_RATE = settings.MUTATION_RATE
 
 # LOAD KELAS DATA
-
 class Data:
     try:
         DATA_PENJADWALAN_FILE = 'DK_133_TF_Semester3_2025.csv'
@@ -150,7 +150,7 @@ class Schedule:
         courses = self._data.get_courses()
         all_rooms = self._data.get_rooms()
         
-        # Fungsi pembantu untuk menemukan MeetingTime dan Ruangan
+        # Helper Functions
         def find_meeting_time(sks, time_str):
             if time_str is None or pd.isna(time_str): return None
             return next((mt for mt in self._data.get_meeting_times(sks) if mt.time == time_str), None)
@@ -168,15 +168,12 @@ class Schedule:
         for i, course in enumerate(courses):
             new_class = Class(i, course)
             
-            # Penetapan Dosen
-            
-            # Pilih SATU Dosen dari daftar alternatif yang tersedia
             if course.instructors:
                 new_class.instructor = random.choice(course.instructors)
             else:
                 new_class.instructor = Instructor(id="N/A", name="TIDAK ADA DOSEN")
 
-            # 2. Tetapkan Ruangan dan Waktu
+            # Tetapkan Ruangan dan Waktu
             if course.is_fixed:
                 # Jalur untuk jadwal yang sudah tetap
                 mt1 = find_meeting_time(1, course.fixed_schedule_1jam)
@@ -196,16 +193,33 @@ class Schedule:
                 final_room = room4 or room2 or room1
                 new_class.room = final_room or random.choice(all_rooms)
             else:
-                # Jalur untuk jadwal yang diacak
-                if course.sks == 1: new_class.meeting_times[1] = random.choice(self._data.get_meeting_times(1))
-                elif course.sks == 2: new_class.meeting_times[2] = random.choice(self._data.get_meeting_times(2))
-                elif course.sks == 4: new_class.meeting_times[4] = random.choice(self._data.get_meeting_times(4))
+                # Jalur untuk jadwal yang tidak tetap   
+                if course.sks == 4:
+                    if random.random() < 0.5:
+                        # Jadwalkan sebagai 2+2 yang TIDAK BENTROK
+                        meeting_times_2sks = self._data.get_meeting_times(2)
+                        mt_a = random.choice(meeting_times_2sks)
+                        mt_b = random.choice(meeting_times_2sks)
+                        # Terus cari mt_b baru jika sama dengan mt_a
+                        while mt_b.id == mt_a.id:
+                            mt_b = random.choice(meeting_times_2sks)
+                        
+                        new_class.meeting_times['2a'] = mt_a
+                        new_class.meeting_times['2b'] = mt_b
+                    else:
+                        new_class.meeting_times[4] = random.choice(self._data.get_meeting_times(4))
+                
                 elif course.sks == 3:
                     new_class.meeting_times[2] = random.choice(self._data.get_meeting_times(2))
                     new_class.meeting_times[1] = random.choice(self._data.get_meeting_times(1))
+                elif course.sks == 2:
+                    new_class.meeting_times[2] = random.choice(self._data.get_meeting_times(2))
+                elif course.sks == 1:
+                    new_class.meeting_times[1] = random.choice(self._data.get_meeting_times(1))
                 
+                # Tetapkan Ruangan yang Tersedia
                 sks_utama = course.sks if course.sks != 3 else 2
-                mt_utama = new_class.meeting_times.get(sks_utama)
+                mt_utama = new_class.meeting_times.get(sks_utama) or new_class.meeting_times.get(4) or new_class.meeting_times.get('2a')
                 new_class.room = self.find_available_room(new_class, sks_utama, mt_utama) if mt_utama else random.choice(all_rooms)
             
             if not new_class.room: new_class.room = random.choice(all_rooms)
@@ -260,6 +274,7 @@ class Schedule:
         group_daily_hours = {}  # K10
         group_schedule_list = {}  # L3
         dosen_teaching_days = {}  # L4
+        dosen_sks_summary = {}
 
         # begin loop untuk setiap kelas
         for c in self._classes:
@@ -273,6 +288,16 @@ class Schedule:
             if constraints_loader.is_enabled('K2') and course.course_type != 3 and room and room.seating_capacity < course.max_students:
                 hard_conflicts += 1
             
+            # [K11] Bentrok 4 SKS (2a & 2b)
+            if constraints_loader.is_enabled('K11') and course.sks == 4:
+                mt_a = c.meeting_times.get('2a')
+                mt_b = c.meeting_times.get('2b')
+                if mt_a and mt_b:
+                    slots_a = set(time_mapper.get_1hr_slots(mt_a.id))
+                    slots_b = set(time_mapper.get_1hr_slots(mt_b.id))
+                    if not slots_a.isdisjoint(slots_b):
+                        hard_conflicts += 1
+
             # [K8] Matkul 3 SKS di hari yang sama
             mt1 = c.meeting_times.get(1)
             mt2 = c.meeting_times.get(2)
@@ -283,6 +308,11 @@ class Schedule:
             # Inisialisasi tracker statistik jika belum ada
             if group_id not in group_schedule_list: group_schedule_list[group_id] = []
             if instructor and instructor.id not in dosen_teaching_days: dosen_teaching_days[instructor.id] = set()
+            if instructor and instructor.id not in dosen_sks_summary: dosen_sks_summary[instructor.id] = 0
+        
+            # Akumulasi SKS aktual untuk L5
+            if instructor:
+                dosen_sks_summary[instructor.id] += course.sks
 
             # --- B. Proses Setiap Sesi Waktu & Booking Sumber Daya ---
             for mt in c.meeting_times.values():
@@ -357,6 +387,20 @@ class Schedule:
         if constraints_loader.is_enabled('L4'):
             for teaching_days in dosen_teaching_days.values():
                 if len(teaching_days) > 4: soft_conflicts += (len(teaching_days) - 4)
+
+        # L5 (Beban SKS Dosen)
+        if constraints_loader.is_enabled('L5') and dosen_sks_summary:
+            # Ambil daftar SKS yang diajarkan oleh semua dosen yang terlibat dalam jadwal ini
+            sks_values = list(dosen_sks_summary.values())
+            
+            if len(sks_values) > 1:
+                # Hitung varians dari sebaran SKS.
+                # Varians tinggi berarti beban kerja timpang.
+                variance = np.var(sks_values)
+                
+                # Tambahkan varians ke soft conflicts. Bobot bisa disesuaikan.
+                # Misal, varians 9 (std dev 3 SKS) akan menambah 9 penalti.
+                soft_conflicts += variance
 
         # Konflik Antar-Kelas (K4, K5, L2)
         for i in range(len(self._classes)):
@@ -464,53 +508,68 @@ class GeneticAlgorithm:
         return child_schedule
     def _mutate_schedule(self, schedule):
         data = schedule._data
+        something_changed = False
+
         for i in range(len(schedule.get_classes())):
-            # Definisikan variabel di awal setiap iterasi loop untuk menghindari error
             current_class = schedule.get_classes()[i]
             course = current_class.course
 
-            # Lewati dan jangan pernah ubah jadwal yang sudah ditetapkan (fixed)
             if course.is_fixed:
                 continue
+
+            # Mutasi Representasi 4 SKS
+            if course.sks == 4 and random.random() < MUTATION_RATE:
+                if 4 in current_class.meeting_times:
+                    current_class.meeting_times.clear()
+                    meeting_times_2sks = data.get_meeting_times(2)
+                    mt_a = random.choice(meeting_times_2sks)
+                    mt_b = random.choice(meeting_times_2sks)
+                    while mt_b.id == mt_a.id:
+                        mt_b = random.choice(meeting_times_2sks)
+                    current_class.meeting_times['2a'] = mt_a
+                    current_class.meeting_times['2b'] = mt_b
+                    something_changed = True
+                elif '2a' in current_class.meeting_times:
+                    current_class.meeting_times.clear()
+                    current_class.meeting_times[4] = random.choice(data.get_meeting_times(4))
+                    something_changed = True
 
             # Mutasi Waktu (MeetingTime)
             if random.random() < MUTATION_RATE:
                 if course.sks == 3:
                     current_class.meeting_times[2] = random.choice(data.get_meeting_times(2))
                     current_class.meeting_times[1] = random.choice(data.get_meeting_times(1))
-                elif course.sks in [1, 2, 4]:
-                    sks_key = 4 if course.sks == 4 else (2 if course.sks == 2 else 1)
-                    # Reset dictionary waktu sebelum menetapkan yang baru
-                    current_class.meeting_times = {1: None, 2: None, 4: None}
-                    current_class.meeting_times[sks_key] = random.choice(data.get_meeting_times(sks_key))
-                # Tandai bahwa fitness perlu dihitung ulang
-                schedule._is_fitness_changed = True
+                elif course.sks == 2:
+                    current_class.meeting_times[2] = random.choice(data.get_meeting_times(2))
+                elif course.sks == 1:
+                    current_class.meeting_times[1] = random.choice(data.get_meeting_times(1))
+                # Untuk 4 SKS, biarkan mutasi representasi yang menanganinya, atau bisa juga ditambahkan di sini.
+                # Untuk semplicitas, kita biarkan.
+                something_changed = True
 
             # Mutasi Ruangan
             if random.random() < MUTATION_RATE:
-                if course.sks == 4: # Praktikum prioritaskan Lab
+                if course.sks == 4:
                     lab_rooms = [r for r in data.get_rooms() if "Lab" in r.number]
                     current_class.room = random.choice(lab_rooms) if lab_rooms else random.choice(data.get_rooms())
-                else: # Kelas teori
+                else:
                     current_class.room = random.choice(data.get_rooms())
-                schedule._is_fitness_changed = True
+                something_changed = True
 
             # Mutasi Dosen
             if len(course.instructors) > 1 and random.random() < MUTATION_RATE:
                 current_instructor = current_class.instructor
-                
-                # Buat daftar dosen lain yang bisa dipilih
                 if current_instructor:
                     other_instructors = [inst for inst in course.instructors if inst.id != current_instructor.id]
                 else:
-                    # Jika karena suatu hal tidak ada dosen, pilih dari semua yang tersedia
                     other_instructors = course.instructors
-                
-                # Jika ada pilihan lain, ganti dosen
                 if other_instructors:
-                    new_instructor = random.choice(other_instructors)
-                    current_class.instructor = new_instructor
-                    schedule._is_fitness_changed = True
+                    current_class.instructor = random.choice(other_instructors)
+                    something_changed = True
+
+        # Setelah loop selesai, jika ada perubahan, tandai fitness untuk dihitung ulang
+        if something_changed:
+            schedule._is_fitness_changed = True
                 
         return schedule
     def _tournament_selection(self, pop):
@@ -522,7 +581,7 @@ class GeneticAlgorithm:
 
 class DisplayManager:
     def _split_schedule_time(self, schedule_string):
-        """Memecah string jadwal menjadi hari dan jam."""
+        """Memecah string jadwal menjadi hari dan jam dengan aman."""
         try:
             if not schedule_string or not isinstance(schedule_string, str):
                 return 'N/A', 'N/A'
@@ -530,86 +589,93 @@ class DisplayManager:
             if len(parts) == 2:
                 return parts[0], parts[1]
             else:
+                # Fallback untuk format yang tidak terduga
                 return parts[0] if parts else 'N/A', '-'
         except Exception:
             return 'N/A', 'N/A'
 
     def print_schedule_as_table(self, schedule, generation_number, elapsed_time):
-        # Urutkan kelas berdasarkan SKS dan nomor mata kuliah
+        # Urutkan kelas berdasarkan SKS (menurun) dan kode mata kuliah
         classes = sorted(schedule.get_classes(), 
                          key=lambda c: (c.course.sks, c.course.number), 
                          reverse=True)
         
-        print(f"\n======================================================================================================================================\n JADWAL KULIAH TERBAIK (Generasi #{generation_number})\n > Fitness: {schedule.get_fitness():.5f}\n > Jumlah Konflik: {schedule.get_num_of_conflicts()}\n > Waktu Komputasi: {elapsed_time:.2f} detik\n======================================================================================================================================")
+        # Header info (diperbarui untuk menyertakan skor)
+        print(f"\n==================================================================================================================================================================\n JADWAL KULIAH TERBAIK (Generasi #{generation_number})\n > Skor: {schedule.get_score()} (Hard: {schedule.get_hard_conflicts()}, Soft: {schedule.get_soft_conflicts()})\n > Waktu Komputasi: {elapsed_time:.2f} detik\n==================================================================================================================================================================")
         
-        # Buat tabel dengan PrettyTable
+        # Buat header tabel yang generik dan informatif
         table = prettytable.PrettyTable([
             'No', 
             'Mata Kuliah (Kode, SKS, Kuota)', 
             'Kelompok', 
             'Ruangan (Kap.)', 
             'Dosen', 
-            'Hari (2 SKS)', 
-            'Jam (2 SKS)', 
-            'Hari (1 SKS)', 
-            'Jam (1 SKS)',
-            'Hari (4 SKS)',
-            'Jam (4 SKS)'
+            'Hari (Sesi 1)', 
+            'Jam (Sesi 1)', 
+            'Hari (Sesi 2)', 
+            'Jam (Sesi 2)'
         ])
         
-        # Loop melalui setiap kelas dan tambahkan ke tabel
+        # Loop melalui kelas yang sudah terurut dan isi tabel
         for i, current_class in enumerate(classes):
             course = current_class.course
             sks = course.sks
             
-            # Inisialisasi semua kolom jadwal sebagai N/A
-            hari_2sks, jam_2sks = '-', '-'
-            hari_1sks, jam_1sks = '-', '-'
-            hari_4sks, jam_4sks = '-', '-'
+            # Inisialisasi semua kolom jadwal sebagai default
+            hari1, jam1, hari2, jam2 = '-', '-', '-', '-'
 
-            # Ambil data meeting time dari objek Class
-            mt4 = current_class.meeting_times.get(4)
-            mt2 = current_class.meeting_times.get(2)
-            mt1 = current_class.meeting_times.get(1)
+            # Ambil semua kemungkinan meeting time dari objek Class
+            mt_block_4 = current_class.meeting_times.get(4)
+            mt_split_2a = current_class.meeting_times.get('2a')
+            mt_split_2b = current_class.meeting_times.get('2b')
+            mt_sesi_2 = current_class.meeting_times.get(2)
+            mt_sesi_1 = current_class.meeting_times.get(1)
 
-            # Isi kolom yang sesuai berdasarkan SKS mata kuliah
-            if sks == 4 and mt4:
-                hari_4sks, jam_4sks = self._split_schedule_time(mt4.time)
-            elif sks == 3:
-                # 3 SKS adalah gabungan 2 SKS dan 1 SKS
-                if mt2:
-                    hari_2sks, jam_2sks = self._split_schedule_time(mt2.time)
-                if mt1:
-                    hari_1sks, jam_1sks = self._split_schedule_time(mt1.time)
-            elif sks == 2 and mt2:
-                hari_2sks, jam_2sks = self._split_schedule_time(mt2.time)
-            elif sks == 1 and mt1:
-                hari_1sks, jam_1sks = self._split_schedule_time(mt1.time)
+            # LOGIKA PENGISIAN KOLOM YANG CERDAS
+            if sks == 4:
+                if mt_block_4:
+                    # Kasus blok 4 jam -> isi Sesi 1
+                    hari1, jam1 = self._split_schedule_time(mt_block_4.time)
+                elif mt_split_2a and mt_split_2b:
+                    # Kasus 2+2 jam -> isi Sesi 1 dan Sesi 2
+                    hari1, jam1 = self._split_schedule_time(mt_split_2a.time)
+                    hari2, jam2 = self._split_schedule_time(mt_split_2b.time)
+            
+            elif sks == 3 and mt_sesi_2 and mt_sesi_1:
+                # Kasus 3 SKS (2+1) -> isi Sesi 1 (2 jam) dan Sesi 2 (1 jam)
+                hari1, jam1 = self._split_schedule_time(mt_sesi_2.time)
+                hari2, jam2 = self._split_schedule_time(mt_sesi_1.time)
+
+            elif sks == 2 and mt_sesi_2:
+                # Kasus 2 SKS -> isi Sesi 1
+                hari1, jam1 = self._split_schedule_time(mt_sesi_2.time)
+
+            elif sks == 1 and mt_sesi_1:
+                # Kasus 1 SKS -> isi Sesi 1
+                hari1, jam1 = self._split_schedule_time(mt_sesi_1.time)
             
             # Ambil detail lain seperti ruangan dan dosen
             room_info = f"{current_class.room.number} ({current_class.room.seating_capacity})" if current_class.room else "N/A"
             instructor_info = current_class.instructor.name if current_class.instructor else "N/A"
 
-            # Tambahkan baris ke tabel
+            # Tambahkan baris yang sudah lengkap ke tabel
             table.add_row([
                 str(i + 1),
                 f"{course.name}\n({course.number}, {sks} SKS, {course.max_students} mhs)",
                 f"Tingkat {course.student_group[0]} - Kelas {course.student_group[1]}",
                 room_info,
                 instructor_info,
-                hari_2sks,
-                jam_2sks,
-                hari_1sks,
-                jam_1sks,
-                hari_4sks,
-                jam_4sks
+                hari1,
+                jam1,
+                hari2,
+                jam2
             ])
             
         print(table)
         
-        # Simpan jadwal ke file CSV
+        # Simpan ke CSV dengan format yang sama
         df = pd.DataFrame(table.rows, columns=table.field_names)
-        output_filename = "Jadwal_Final_Optimal3.csv"
+        output_filename = "Jadwal_Final_Optimal_Terurut.csv"
         df.to_csv(output_filename, index=False)
         print(f"\nJadwal optimal telah disimpan ke file '{output_filename}'")
 
@@ -620,7 +686,7 @@ if __name__ == '__main__':
     # Skor hanya dihitung dari soft conflicts jika tidak ada hard conflicts.
     # Misal, jika ada 5 soft conflicts, skornya adalah 5.
     # Kita set ambang batas di 10, artinya kita terima solusi dengan < 10 soft conflicts.
-    SCORE_THRESHOLD = 1
+    SCORE_THRESHOLD = 1.5
     
     start_time = time.time()
     data = Data()
@@ -671,5 +737,5 @@ if __name__ == '__main__':
     print(f" > Hard Conflicts       : {best_schedule_final.get_hard_conflicts()}")
     print(f" > Soft Conflicts       : {best_schedule_final.get_soft_conflicts()}")
 
-    # Panggil metode untuk mencetak jadwal sebagai tabel
+    # Tampilkan jadwal terbaik dalam format tabel
     display_manager.print_schedule_as_table(best_schedule_final, generation_num, elapsed_time)

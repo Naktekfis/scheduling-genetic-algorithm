@@ -9,7 +9,9 @@ K7,hard,Jadwal yang sudah ditetapkan (fixed) tidak boleh diubah (ditangani di in
 K8,hard,Jadwal 2 SKS dan 1 SKS untuk matkul 3 SKS tidak boleh di hari yang sama.,1
 K9,hard,Dosen tidak boleh mengajar lebih dari 5 jam dalam satu hari.,1
 K10,hard,Mahasiswa tidak boleh kuliah lebih dari 6 jam dalam satu hari.,1
+K11,hard,"Sesi 2+2 untuk matkul 4 SKS tidak boleh tumpang tindih satu sama lain.",1
 L1,soft,Jadwal 1 SKS tidak boleh di awal atau akhir hari (waktu tepi).,1
 L2,soft,Mata kuliah sulit tingkat 2 tidak boleh bentrok dengan jadwal tingkat 3.,1
 L3,soft,Mahasiswa tidak boleh memiliki lebih dari 2 kelas berturut-turut tanpa jeda.,1
 L4,soft,Dosen sebaiknya memiliki hari libur (mengajar maks 4 hari/minggu).,1
+L5,soft,"Beban kerja SKS dosen harus seimbang (minimalkan varians).",1
