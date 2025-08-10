@@ -26,8 +26,6 @@ DATA_DIR = os.path.join(BASE_DIR, 'data')
 constraints_path = os.path.join(DATA_DIR, 'Constraints.csv')
 constraints_loader = ConstraintLoader(constraints_path)
 
-print("--- Sistem Cerdas Penjadwalan Kuliah Berbasis Algoritma Genetika ---")
-
 # Parameter Algoritma Genetika (diambil dari config)
 POPULATION_SIZE = settings.POPULATION_SIZE
 TOURNAMENT_SELECTION_SIZE = settings.TOURNAMENT_SELECTION_SIZE
@@ -140,7 +138,7 @@ class Data:
 
         self._number_of_classes = len(self._courses)
         self._time_slot_mapper = TimeSlotMapper(self._meeting_times_1jam, self._meeting_times_2jam, self._meeting_times_4jam)
-        print("Data berhasil dimuat (Logika Dosen Alternatif).")
+        print("Data berhasil dimuat...")
 
     # --- Getter Methods ---
     def get_rooms(self): return self._rooms
@@ -157,7 +155,6 @@ class Data:
 # KELAS UTAMA UNTUK ALGORITMA GENETIKA
 class Schedule:
     def __init__(self):
-        # self._data telah dihapus dari sini
         self._classes = []
         self._is_fitness_changed = True
         
@@ -204,7 +201,6 @@ class Schedule:
                 room2 = find_room(course.fixed_room_2jam)
                 room4 = find_room(course.fixed_room_4jam)
 
-                # Fallback acak menggunakan `data`, BUKAN `self._data`
                 if course.sks == 1: new_class.meeting_times[1] = mt1 or random.choice(data.get_meeting_times(1))
                 if course.sks == 2: new_class.meeting_times[2] = mt2 or random.choice(data.get_meeting_times(2))
                 if course.sks == 4: new_class.meeting_times[4] = mt4 or random.choice(data.get_meeting_times(4))
@@ -438,7 +434,6 @@ class Schedule:
         for i in range(len(self._classes)):
             for j in range(i + 1, len(self._classes)):
                 c1, c2 = self._classes[i], self._classes[j]
-                # === PERUBAHAN: Teruskan 'data' ke check_time_overlap ===
                 if self.check_time_overlap(c1, c2, data):
                     c1_course, c2_course = c1.course, c2.course
                     if constraints_loader.is_enabled('K4') and c1_course.course_type == 3 and c2_course.course_type == 3 and {c1_course.student_group[0], c2_course.student_group[0]} == {2, 3}: hard_conflicts += 1
@@ -493,18 +488,14 @@ class Population:
 class GeneticAlgorithm:
     def __init__(self, data_obj):
         self.data = data_obj
-        # PERBAIKAN: Inisialisasi self.pool sebagai None DI LUAR try-except.
-        # Ini menjamin atribut .pool selalu ada.
         self.pool = None
         try:
             # Membuat pool proses yang akan digunakan kembali di setiap generasi
             self.pool = multiprocessing.Pool(initializer=init_worker, initargs=(self.data,))
         except RuntimeError:
             print("Peringatan: Gagal membuat multiprocessing pool. Menjalankan dalam mode single-core.")
-            # self.pool sudah None, jadi tidak perlu diubah.
         except Exception as e:
             print(f"Error tak terduga saat membuat pool: {e}. Menjalankan dalam mode single-core.")
-
 
     def evolve(self, population):
         schedules = population.get_schedules()
@@ -534,7 +525,7 @@ class GeneticAlgorithm:
         for _ in range(NUMB_OF_ELITE_SCHEDULES, POPULATION_SIZE):
             parent1 = self._tournament_selection(pop).get_schedules()[0]
             parent2 = self._tournament_selection(pop).get_schedules()[0]
-            child = self._crossover_schedule(parent1, parent2) # Asumsi crossover tidak butuh 'data' lagi
+            child = self._crossover_schedule(parent1, parent2)
             crossover_pop.get_schedules().append(child)
         return crossover_pop
     
@@ -652,8 +643,6 @@ class GeneticAlgorithm:
         for _ in range(TOURNAMENT_SELECTION_SIZE):
             tournament_pop.get_schedules().append(random.choice(pop.get_schedules()))
         
-        # PERBAIKAN: Gunakan nilai _fitness yang sudah di-cache.
-        # Nilai ini dijamin sudah up-to-date oleh `evolve` sebelum crossover dipanggil.
         tournament_pop.get_schedules().sort(key=lambda x: x._fitness, reverse=True)
         
         return tournament_pop
@@ -759,32 +748,30 @@ class DisplayManager:
         
         # Simpan ke CSV dengan format yang sama
         df = pd.DataFrame(table.rows, columns=table.field_names)
-        output_filename = "Jadwal_Final_Optimal_Terurut.csv"
+        output_filename = "Jadwal_Final_Optimal4.csv"
         df.to_csv(output_filename, index=False)
         print(f"\nJadwal optimal telah disimpan ke file '{output_filename}'")
 
 # MAIN EXECUTION BLOCK
 if __name__ == '__main__':
-    # Pengaman wajib untuk multiprocessing di beberapa sistem operasi
     multiprocessing.freeze_support()
     
-    # --- Konfigurasi Eksekusi ---
+    # Konfigurasi Eksekusi
     SCORE_THRESHOLD = 1
     
     start_time = time.time()
     
-    # Inisialisasi variabel di luar blok try untuk memastikan mereka selalu ada,
-    # bahkan jika terjadi error saat inisialisasi.
+    # Inisialisasi variabel di luar blok try untuk memastikan mereka selalu ada
     genetic_algorithm = None
 
     try:
-        # 1. Buat objek Data HANYA SEKALI di proses utama
+        # Buat objek Data di proses utama
         print("Memuat dan memproses data sumber...")
         data = Data()
         
         display_manager = DisplayManager()
         
-        # 2. Buat objek GeneticAlgorithm dan berikan `data` padanya
+        # Buat objek GeneticAlgorithm dan berikan `data` padanya
         # Objek ini akan mengelola pool proses paralel
         genetic_algorithm = GeneticAlgorithm(data)
 
@@ -792,23 +779,13 @@ if __name__ == '__main__':
         population = Population(POPULATION_SIZE, data)
 
         print("Mengevaluasi populasi awal secara paralel...")
-        # =========================================================================
-        # === ALUR BARU: Evaluasi Eksplisit Sebelum Akses Skor ===
-        # =========================================================================
-        # Panggil evolve() satu kali di awal. Fungsi ini akan:
-        # 1. Mengevaluasi semua jadwal di populasi awal secara paralel.
-        # 2. Mengisi nilai _score, _hard_conflicts, dll. di setiap objek Schedule.
-        # 3. Mengurutkan populasi berdasarkan fitness.
-        # 4. Melakukan putaran pertama crossover & mutasi untuk membuat Generasi 1.
         population = genetic_algorithm.evolve(population)
-        generation_num = 1 # Kita sudah menyelesaikan generasi pertama.
+        generation_num = 1
         
-        # Sekarang aman untuk memanggil getter pasif (`get_score`, dll.)
         best_schedule = population.get_schedules()[0]
         print(f"Jadwal Terbaik Gen #{generation_num} -> Skor: {best_schedule.get_score()} (Hard: {best_schedule.get_hard_conflicts()}, Soft: {best_schedule.get_soft_conflicts()})")
-        # =========================================================================
-
-        # Loop utama sekarang berjalan untuk sisa generasi
+        
+        # Loop utama
         print(f"\nMemulai proses evolusi paralel untuk {MAX_GENERATION - 1} generasi berikutnya...")
         with tqdm(total=MAX_GENERATION - 1, desc="Evolusi Generasi") as pbar:
             for i in range(MAX_GENERATION - 1):
@@ -816,10 +793,8 @@ if __name__ == '__main__':
                 
                 # Panggil evolve untuk generasi selanjutnya
                 population = genetic_algorithm.evolve(population)
-                
                 best_schedule = population.get_schedules()[0]
                 
-                # Getter sekarang aman dipanggil karena evolve sudah memastikan evaluasi
                 pbar.set_postfix({
                     "Skor Terbaik": f"{best_schedule.get_score()}", 
                     "Hard": f"{best_schedule.get_hard_conflicts()}", 
@@ -848,7 +823,7 @@ if __name__ == '__main__':
         display_manager.print_schedule_as_table(best_schedule_final, generation_num, elapsed_time)
 
     finally:
-        # PENGAMAN: Hanya tutup pool jika objek genetic_algorithm berhasil dibuat.
+        # Hanya tutup pool jika objek genetic_algorithm berhasil dibuat.
         if genetic_algorithm:
             print("\nMenutup pool proses paralel...")
             genetic_algorithm.close_pool()

@@ -5,6 +5,7 @@ Proyek ini adalah sebuah implementasi Algoritma Genetika (GA) yang bertujuan unt
 ## Fitur Inti
 
 -   **Pencarian Berbasis GA**: Menggunakan pendekatan evolusioner (seleksi, crossover, mutasi) untuk mengeksplorasi ruang pencarian jadwal yang sangat luas.
+-   **Eksekusi Multi-Core**: Memanfaatkan modul `multiprocessing` Python untuk menjalankan evaluasi fitness secara paralel, secara signifikan mengurangi waktu yang dibutuhkan per generasi pada mesin dengan banyak core CPU.
 -   **Sistem Penilaian Konflik**: Kualitas sebuah jadwal diukur berdasarkan sistem skor. Pelanggaran aturan dibagi menjadi dua kategori:
     -   **Hard Constraints**: Pelanggaran fatal yang harus dihilangkan (misal: bentrok jadwal dosen). Diberi bobot penalti yang sangat tinggi.
     -   **Soft Constraints**: Pelanggaran preferensi yang sebaiknya dihindari (misal: dosen mengajar lebih dari 4 hari). Diberi bobot penalti rendah.
@@ -73,7 +74,7 @@ Pastikan Anda berada di direktori root proyek dan virtual environment aktif.
 python src/penjadwalan_genetic.py
 ```
 
-Proses akan berjalan di terminal, menampilkan progres skor dan rincian konflik. Hasil akhir akan ditampilkan di console dan disimpan dalam file `Jadwal_Final_Optimal3.csv`.
+Proses akan berjalan di terminal, menampilkan progres skor dan rincian konflik. Hasil akhir akan ditampilkan di console dan disimpan dalam file `Jadwal_Final_Optimal4.csv`.
 
 ## Catatan Implementasi
 

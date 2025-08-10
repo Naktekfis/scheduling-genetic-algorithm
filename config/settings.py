@@ -5,7 +5,7 @@
 POPULATION_SIZE = 110
 
 # Ukuran individu yang dipilih untuk turnamen seleksi
-TOURNAMENT_SELECTION_SIZE = 32
+TOURNAMENT_SELECTION_SIZE = 40
 
 # Jumlah maksimum generasi yang akan dijalankan oleh algoritma
 MAX_GENERATION = 2000
@@ -19,4 +19,4 @@ CROSSOVER_RATE = 0.5
 
 # Probabilitas terjadinya mutasi pada sebuah gen dalam kromosom.
 # Nilai antara 0.0 dan 1.0.
-MUTATION_RATE = 0.1
+MUTATION_RATE = 0.3
