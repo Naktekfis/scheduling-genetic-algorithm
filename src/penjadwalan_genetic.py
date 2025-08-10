@@ -12,6 +12,7 @@ import time
 import re
 import copy
 import numpy as np
+import multiprocessing
 from tqdm import tqdm
 from src.type.time_slot_mapper import TimeSlotMapper
 from src.constraints.constraints_loader import ConstraintLoader
@@ -34,6 +35,26 @@ MAX_GENERATION = settings.MAX_GENERATION
 NUMB_OF_ELITE_SCHEDULES = settings.NUMB_OF_ELITE_SCHEDULES
 CROSSOVER_RATE = settings.CROSSOVER_RATE
 MUTATION_RATE = settings.MUTATION_RATE
+
+def init_worker(data_obj):
+    """Fungsi ini akan dipanggil sekali oleh setiap proses pekerja saat dibuat."""
+    global shared_data
+    shared_data = data_obj
+
+def evaluate_dna(schedule_dna):
+    """
+    Fungsi evaluator yang dijalankan secara paralel.
+    Menerima 'DNA' (list of Class), bukan seluruh objek Schedule.
+    """
+    # Rekonstruksi objek Schedule 'ringan' di dalam proses pekerja
+    schedule = Schedule()
+    # Atur DNA (list of classes)
+    schedule._classes = schedule_dna
+    
+    # Hitung skor dan konflik menggunakan data global yang sudah di-share
+    _, score, hard, soft = schedule.calculate_fitness_and_score(shared_data)
+    
+    return score, hard, soft
 
 # LOAD KELAS DATA
 class Data:
@@ -136,24 +157,24 @@ class Data:
 # KELAS UTAMA UNTUK ALGORITMA GENETIKA
 class Schedule:
     def __init__(self):
-        self._data = data
+        # self._data telah dihapus dari sini
         self._classes = []
         self._is_fitness_changed = True
         
-        # Atribut baru untuk sistem skor dan fitness
         self._fitness = -1.0
         self._score = -1
         self._hard_conflicts = 0
         self._soft_conflicts = 0
 
-    def initialize(self):
-        courses = self._data.get_courses()
-        all_rooms = self._data.get_rooms()
+    def initialize(self, data):
+        courses = data.get_courses()
+        all_rooms = data.get_rooms()
         
-        # Helper Functions
+        # Helper functions sekarang menggunakan 'data' dari scope luar
         def find_meeting_time(sks, time_str):
             if time_str is None or pd.isna(time_str): return None
-            return next((mt for mt in self._data.get_meeting_times(sks) if mt.time == time_str), None)
+            # Menggunakan 'data' dari argumen initialize
+            return next((mt for mt in data.get_meeting_times(sks) if mt.time == time_str), None)
 
         def find_room(room_number_from_csv):
             if room_number_from_csv is None or pd.isna(room_number_from_csv): return None
@@ -175,7 +196,7 @@ class Schedule:
 
             # Tetapkan Ruangan dan Waktu
             if course.is_fixed:
-                # Jalur untuk jadwal yang sudah tetap
+                # === JALUR FIXED ===
                 mt1 = find_meeting_time(1, course.fixed_schedule_1jam)
                 mt2 = find_meeting_time(2, course.fixed_schedule_2jam)
                 mt4 = find_meeting_time(4, course.fixed_schedule_4jam)
@@ -183,97 +204,129 @@ class Schedule:
                 room2 = find_room(course.fixed_room_2jam)
                 room4 = find_room(course.fixed_room_4jam)
 
-                if course.sks == 1: new_class.meeting_times[1] = mt1 or random.choice(self._data.get_meeting_times(1))
-                if course.sks == 2: new_class.meeting_times[2] = mt2 or random.choice(self._data.get_meeting_times(2))
-                if course.sks == 4: new_class.meeting_times[4] = mt4 or random.choice(self._data.get_meeting_times(4))
+                # Fallback acak menggunakan `data`, BUKAN `self._data`
+                if course.sks == 1: new_class.meeting_times[1] = mt1 or random.choice(data.get_meeting_times(1))
+                if course.sks == 2: new_class.meeting_times[2] = mt2 or random.choice(data.get_meeting_times(2))
+                if course.sks == 4: new_class.meeting_times[4] = mt4 or random.choice(data.get_meeting_times(4))
                 if course.sks == 3:
-                    new_class.meeting_times[1] = mt1 or random.choice(self._data.get_meeting_times(1))
-                    new_class.meeting_times[2] = mt2 or random.choice(self._data.get_meeting_times(2))
+                    new_class.meeting_times[1] = mt1 or random.choice(data.get_meeting_times(1))
+                    new_class.meeting_times[2] = mt2 or random.choice(data.get_meeting_times(2))
                 
                 final_room = room4 or room2 or room1
                 new_class.room = final_room or random.choice(all_rooms)
             else:
-                # Jalur untuk jadwal yang tidak tetap   
+                # === JALUR RANDOM ===
                 if course.sks == 4:
                     if random.random() < 0.5:
-                        # Jadwalkan sebagai 2+2 yang TIDAK BENTROK
-                        meeting_times_2sks = self._data.get_meeting_times(2)
+                        meeting_times_2sks = data.get_meeting_times(2)
                         mt_a = random.choice(meeting_times_2sks)
                         mt_b = random.choice(meeting_times_2sks)
-                        # Terus cari mt_b baru jika sama dengan mt_a
                         while mt_b.id == mt_a.id:
                             mt_b = random.choice(meeting_times_2sks)
-                        
                         new_class.meeting_times['2a'] = mt_a
                         new_class.meeting_times['2b'] = mt_b
                     else:
-                        new_class.meeting_times[4] = random.choice(self._data.get_meeting_times(4))
+                        new_class.meeting_times[4] = random.choice(data.get_meeting_times(4))
                 
                 elif course.sks == 3:
-                    new_class.meeting_times[2] = random.choice(self._data.get_meeting_times(2))
-                    new_class.meeting_times[1] = random.choice(self._data.get_meeting_times(1))
+                    new_class.meeting_times[2] = random.choice(data.get_meeting_times(2))
+                    new_class.meeting_times[1] = random.choice(data.get_meeting_times(1))
                 elif course.sks == 2:
-                    new_class.meeting_times[2] = random.choice(self._data.get_meeting_times(2))
+                    new_class.meeting_times[2] = random.choice(data.get_meeting_times(2))
                 elif course.sks == 1:
-                    new_class.meeting_times[1] = random.choice(self._data.get_meeting_times(1))
+                    new_class.meeting_times[1] = random.choice(data.get_meeting_times(1))
                 
-                # Tetapkan Ruangan yang Tersedia
+                # Panggilan ke find_available_room juga harus meneruskan 'data'
                 sks_utama = course.sks if course.sks != 3 else 2
                 mt_utama = new_class.meeting_times.get(sks_utama) or new_class.meeting_times.get(4) or new_class.meeting_times.get('2a')
-                new_class.room = self.find_available_room(new_class, sks_utama, mt_utama) if mt_utama else random.choice(all_rooms)
+                
+                # Pastikan mt_utama ada sebelum memanggil find_available_room
+                if mt_utama:
+                    new_class.room = self.find_available_room(new_class, sks_utama, mt_utama, data)
+                else:
+                    # Fallback jika tidak ada meeting time yang bisa jadi acuan
+                    new_class.room = random.choice(all_rooms)
             
-            if not new_class.room: new_class.room = random.choice(all_rooms)
+            # Pengaman terakhir jika ruangan masih belum ditetapkan
+            if not new_class.room:
+                new_class.room = random.choice(all_rooms)
+                
             self._classes.append(new_class)
                 
         return self
 
-    def find_available_room(self, class_to_schedule, target_sks, target_meeting_time):
-        time_mapper = self._data.get_time_slot_mapper()
-        all_rooms = self._data.get_rooms()
+    def find_available_room(self, class_to_schedule, target_sks, target_meeting_time, data):
+        # Menggunakan 'data' dari argumen, bukan 'self._data'
+        time_mapper = data.get_time_slot_mapper()
+        all_rooms = data.get_rooms()
+        
         target_slots = set(time_mapper.get_1hr_slots(target_meeting_time.id))
-        if not target_slots: return random.choice(all_rooms)
+        if not target_slots:
+            return random.choice(all_rooms)
+
         room_occupancy_map = {}
         for existing_class in self._classes:
-            if existing_class.id == class_to_schedule.id or not existing_class.room: continue
+            if existing_class.id == class_to_schedule.id or not existing_class.room:
+                continue
             room_id = existing_class.room.number
-            if room_id not in room_occupancy_map: room_occupancy_map[room_id] = set()
+            if room_id not in room_occupancy_map:
+                room_occupancy_map[room_id] = set()
             for mt in existing_class.meeting_times.values():
-                if mt: room_occupancy_map[room_id].update(time_mapper.get_1hr_slots(mt.id))
+                if mt:
+                    # Menggunakan 'time_mapper' yang didefinisikan di atas
+                    occupied_slots = time_mapper.get_1hr_slots(mt.id)
+                    room_occupancy_map[room_id].update(occupied_slots)
+
         shuffled_rooms = random.sample(all_rooms, len(all_rooms))
+        
+        # Fallback pertama: cari ruangan yang pas dan tersedia
         for room in shuffled_rooms:
             occupied_slots = room_occupancy_map.get(room.number, set())
-            if target_slots.isdisjoint(occupied_slots) and room.seating_capacity >= class_to_schedule.course.max_students:
+            if target_slots.isdisjoint(occupied_slots):
+                if room.seating_capacity >= class_to_schedule.course.max_students:
+                    return room
+
+        # Fallback kedua: cari ruangan apa saja yang tersedia
+        for room in shuffled_rooms:
+            occupied_slots = room_occupancy_map.get(room.number, set())
+            if target_slots.isdisjoint(occupied_slots):
                 return room
-        for room in shuffled_rooms:
-            occupied_slots = room_occupancy_map.get(room.number, set())
-            if target_slots.isdisjoint(occupied_slots): return room
+                
+        # Fallback terakhir: kembalikan acak
         return random.choice(all_rooms)
 
-    def check_time_overlap(self, c1, c2):
-        time_mapper = self._data.get_time_slot_mapper()
+    def check_time_overlap(self, c1, c2, data):
+        time_mapper = data.get_time_slot_mapper()
+
         c1_slots, c2_slots = set(), set()
+        
         for mt in c1.meeting_times.values():
-            if mt: c1_slots.update(time_mapper.get_1hr_slots(mt.id))
+            if mt:
+                c1_slots.update(time_mapper.get_1hr_slots(mt.id))
+                
         for mt in c2.meeting_times.values():
-            if mt: c2_slots.update(time_mapper.get_1hr_slots(mt.id))
-        if not c1_slots or not c2_slots: return False
+            if mt:
+                c2_slots.update(time_mapper.get_1hr_slots(mt.id))
+        
+        # Jika salah satu kelas tidak punya jadwal, tidak mungkin overlap
+        if not c1_slots or not c2_slots:
+            return False
+            
         return not c1_slots.isdisjoint(c2_slots)
 
-    def calculate_fitness_and_score(self):
+    def calculate_fitness_and_score(self, data):
         hard_conflicts, soft_conflicts = 0, 0
         HARD_CONFLICT_PENALTY, SOFT_CONFLICT_PENALTY = 1000, 1
-        time_mapper = self._data.get_time_slot_mapper()
+        
+        # === PERUBAHAN: Gunakan objek 'data' yang diterima sebagai argumen ===
+        time_mapper = data.get_time_slot_mapper()
 
         # Buat peta untuk booking sumber daya 
-        # Kunci: (resource_type, resource_id, slot_id) -> Value: course_number
-        # Contoh: ('room', 'R-01', 'Senin-08') -> 'TF2101'
         bookings = {}
         
         # Statistik Agregat
-        dosen_daily_hours = {}  # K9
-        group_daily_hours = {}  # K10
-        group_schedule_list = {}  # L3
-        dosen_teaching_days = {}  # L4
+        dosen_daily_hours, group_daily_hours = {}, {}
+        group_schedule_list, dosen_teaching_days = {}, {}
         dosen_sks_summary = {}
 
         # begin loop untuk setiap kelas
@@ -290,8 +343,7 @@ class Schedule:
             
             # [K11] Bentrok 4 SKS (2a & 2b)
             if constraints_loader.is_enabled('K11') and course.sks == 4:
-                mt_a = c.meeting_times.get('2a')
-                mt_b = c.meeting_times.get('2b')
+                mt_a, mt_b = c.meeting_times.get('2a'), c.meeting_times.get('2b')
                 if mt_a and mt_b:
                     slots_a = set(time_mapper.get_1hr_slots(mt_a.id))
                     slots_b = set(time_mapper.get_1hr_slots(mt_b.id))
@@ -299,18 +351,15 @@ class Schedule:
                         hard_conflicts += 1
 
             # [K8] Matkul 3 SKS di hari yang sama
-            mt1 = c.meeting_times.get(1)
-            mt2 = c.meeting_times.get(2)
-            if constraints_loader.is_enabled('K8') and course.sks == 3 and mt1 and mt2:
-                if mt1.time.split('-')[0] == mt2.time.split('-')[0]:
-                    hard_conflicts += 1
+            mt1, mt2 = c.meeting_times.get(1), c.meeting_times.get(2)
+            if constraints_loader.is_enabled('K8') and course.sks == 3 and mt1 and mt2 and mt1.time.split('-')[0] == mt2.time.split('-')[0]:
+                hard_conflicts += 1
 
-            # Inisialisasi tracker statistik jika belum ada
+            # Inisialisasi tracker statistik
             if group_id not in group_schedule_list: group_schedule_list[group_id] = []
             if instructor and instructor.id not in dosen_teaching_days: dosen_teaching_days[instructor.id] = set()
             if instructor and instructor.id not in dosen_sks_summary: dosen_sks_summary[instructor.id] = 0
         
-            # Akumulasi SKS aktual untuk L5
             if instructor:
                 dosen_sks_summary[instructor.id] += course.sks
 
@@ -318,19 +367,13 @@ class Schedule:
             for mt in c.meeting_times.values():
                 if not mt: continue
 
-                # [K6] Waktu Terlarang
-                if constraints_loader.is_enabled('K6') and mt.is_blocked:
-                    hard_conflicts += 1
-                
-                # [L1] Waktu Tepi
-                if constraints_loader.is_enabled('L1') and mt.sks == 1 and mt.is_edge_time:
-                    soft_conflicts += 1
+                if constraints_loader.is_enabled('K6') and mt.is_blocked: hard_conflicts += 1
+                if constraints_loader.is_enabled('L1') and mt.sks == 1 and mt.is_edge_time: soft_conflicts += 1
 
                 day = mt.time.split('-')[0]
                 valid_slots = [s for s in time_mapper.get_1hr_slots(mt.id) if '-' in s]
                 if not valid_slots: continue
 
-                # Kumpulkan data untuk statistik agregat
                 num_hours = len(valid_slots)
                 jam_mulai = int(min(valid_slots, key=lambda s: int(s.split('-')[1])).split('-')[1])
                 jam_selesai = int(max(valid_slots, key=lambda s: int(s.split('-')[1])).split('-')[1]) + 1
@@ -344,35 +387,32 @@ class Schedule:
                 
                 # --- C. Proses Booking & Deteksi Bentrok Langsung ---
                 for slot_id in valid_slots:
-                    # [K1] Booking Kelompok Mahasiswa
                     if constraints_loader.is_enabled('K1'):
                         key = ('group', group_id, slot_id)
                         if key in bookings: hard_conflicts += 1
                         else: bookings[key] = course.number
                     
-                    # [K3] Booking Dosen
                     if constraints_loader.is_enabled('K3') and instructor:
                         key = ('instructor', instructor.id, slot_id)
                         if key in bookings: hard_conflicts += 1
                         else: bookings[key] = course.number
 
-                    # Booking Ruangan
                     if room:
                         key = ('room', room.number, slot_id)
                         if key in bookings: hard_conflicts += 1
                         else: bookings[key] = course.number
 
         # Evaluasi Konflik Agregat & Antar-Kelas Kompleks
-        
-        # K9 & K10 (Limit Jam Harian)
-        if constraints_loader.is_enabled('K9'):
-            for total_jam in dosen_daily_hours.values():
-                if total_jam > 5: hard_conflicts += (total_jam - 5)
-        if constraints_loader.is_enabled('K10'):
-            for total_jam in group_daily_hours.values():
-                if total_jam > 6: hard_conflicts += (total_jam - 6)
+        if constraints_loader.is_enabled('K9') and dosen_daily_hours:
+            hours_array = np.array(list(dosen_daily_hours.values()))
+            violations = hours_array[hours_array > 5] - 5
+            hard_conflicts += np.sum(violations)
 
-        # L3 (Jeda Antar Kuliah)
+        if constraints_loader.is_enabled('K10') and group_daily_hours:
+            hours_array = np.array(list(group_daily_hours.values()))
+            violations = hours_array[hours_array > 6] - 6
+            hard_conflicts += np.sum(violations)
+
         if constraints_loader.is_enabled('L3'):
             for group_id, schedule_list in group_schedule_list.items():
                 sorted_schedule = sorted(schedule_list, key=lambda x: (x[2], x[0]))
@@ -383,31 +423,24 @@ class Schedule:
                         if consecutive_count > 2: soft_conflicts += 1
                     else: consecutive_count = 1
         
-        # L4 (Hari Kosong Dosen)
-        if constraints_loader.is_enabled('L4'):
-            for teaching_days in dosen_teaching_days.values():
-                if len(teaching_days) > 4: soft_conflicts += (len(teaching_days) - 4)
+        if constraints_loader.is_enabled('L4') and dosen_teaching_days:
+            days_counts = np.array([len(days) for days in dosen_teaching_days.values()])
+            violations = days_counts[days_counts > 4] - 4
+            soft_conflicts += np.sum(violations)
 
-        # L5 (Beban SKS Dosen)
         if constraints_loader.is_enabled('L5') and dosen_sks_summary:
-            # Ambil daftar SKS yang diajarkan oleh semua dosen yang terlibat dalam jadwal ini
             sks_values = list(dosen_sks_summary.values())
-            
             if len(sks_values) > 1:
-                # Hitung varians dari sebaran SKS.
-                # Varians tinggi berarti beban kerja timpang.
                 variance = np.var(sks_values)
-                
-                # Tambahkan varians ke soft conflicts. Bobot bisa disesuaikan.
-                # Misal, varians 9 (std dev 3 SKS) akan menambah 9 penalti.
                 soft_conflicts += variance
 
         # Konflik Antar-Kelas (K4, K5, L2)
         for i in range(len(self._classes)):
             for j in range(i + 1, len(self._classes)):
                 c1, c2 = self._classes[i], self._classes[j]
-                c1_course, c2_course = c1.course, c2.course
-                if self.check_time_overlap(c1, c2):
+                # === PERUBAHAN: Teruskan 'data' ke check_time_overlap ===
+                if self.check_time_overlap(c1, c2, data):
+                    c1_course, c2_course = c1.course, c2.course
                     if constraints_loader.is_enabled('K4') and c1_course.course_type == 3 and c2_course.course_type == 3 and {c1_course.student_group[0], c2_course.student_group[0]} == {2, 3}: hard_conflicts += 1
                     if constraints_loader.is_enabled('K5') and c1_course.student_group[0] == 4 and c2_course.student_group[0] == 4 and c1_course.course_type != c2_course.course_type: hard_conflicts += 1
                     if constraints_loader.is_enabled('L2') and c1_course.is_difficult and c2_course.is_difficult and {c1_course.student_group[0], c2_course.student_group[0]} == {2, 3}: soft_conflicts += 1
@@ -418,26 +451,27 @@ class Schedule:
         return fitness, score, hard_conflicts, soft_conflicts
     
     # Getter Methods untuk Fitness dan Statistik
-    def get_fitness(self):
+    def get_fitness(self, data):
+        """Menghitung fitness JIKA diperlukan."""
         if self._is_fitness_changed:
-            self._fitness, self._score, self._hard_conflicts, self._soft_conflicts = self.calculate_fitness_and_score()
+            self._fitness, self._score, self._hard_conflicts, self._soft_conflicts = self.calculate_fitness_and_score(data)
             self._is_fitness_changed = False
         return self._fitness
 
     def get_score(self):
-        self.get_fitness() # Memastikan semua nilai sudah terupdate
+        """Hanya mengembalikan skor yang sudah di-cache. TIDAK memicu kalkulasi."""
         return self._score
 
     def get_num_of_conflicts(self):
-        self.get_fitness()
+        """Hanya mengembalikan jumlah konflik yang sudah di-cache."""
         return self._hard_conflicts + self._soft_conflicts
 
     def get_hard_conflicts(self):
-        self.get_fitness()
+        """Hanya mengembalikan hard conflicts yang sudah di-cache."""
         return self._hard_conflicts
-    
+        
     def get_soft_conflicts(self):
-        self.get_fitness()
+        """Hanya mengembalikan soft conflicts yang sudah di-cache."""
         return self._soft_conflicts
 
     def get_classes(self): 
@@ -445,28 +479,70 @@ class Schedule:
         return self._classes
 
 class Population:
-    def __init__(self, size):
+    # PERBAIKAN: Menambahkan 'self' sebagai argumen pertama.
+    def __init__(self, size, data=None):
         self._size = size
-        self._schedules = [Schedule().initialize() for _ in range(size)]
-    def get_schedules(self): return self._schedules
+        self._schedules = []
+        # Logika ini akan berjalan jika 'data' diberikan saat pembuatan objek
+        if data:
+            self._schedules = [Schedule().initialize(data) for _ in range(size)]
+
+    def get_schedules(self):
+        return self._schedules
 
 class GeneticAlgorithm:
+    def __init__(self, data_obj):
+        self.data = data_obj
+        # PERBAIKAN: Inisialisasi self.pool sebagai None DI LUAR try-except.
+        # Ini menjamin atribut .pool selalu ada.
+        self.pool = None
+        try:
+            # Membuat pool proses yang akan digunakan kembali di setiap generasi
+            self.pool = multiprocessing.Pool(initializer=init_worker, initargs=(self.data,))
+        except RuntimeError:
+            print("Peringatan: Gagal membuat multiprocessing pool. Menjalankan dalam mode single-core.")
+            # self.pool sudah None, jadi tidak perlu diubah.
+        except Exception as e:
+            print(f"Error tak terduga saat membuat pool: {e}. Menjalankan dalam mode single-core.")
+
+
     def evolve(self, population):
+        schedules = population.get_schedules()
+        
+        if self.pool:
+            # Jalur Paralel
+            dna_list = [s.get_classes() for s in schedules]
+            results = self.pool.map(evaluate_dna, dna_list)
+            for i, schedule in enumerate(schedules):
+                schedule._score, schedule._hard_conflicts, schedule._soft_conflicts = results[i]
+                schedule._fitness = 1.0 / (schedule._score + 1)
+                schedule._is_fitness_changed = False
+        else:
+            # Jalur Non-Paralel (Fallback)
+            for s in schedules:
+                s.get_fitness(self.data)
+
+        schedules.sort(key=lambda x: x._fitness, reverse=True)
+        
         return self._mutate_population(self._crossover_population(population))
+
     def _crossover_population(self, pop):
-        crossover_pop = Population(0)
+        crossover_pop = Population(0) # Buat populasi kosong
+        schedules = pop.get_schedules()
         for i in range(NUMB_OF_ELITE_SCHEDULES):
-            crossover_pop.get_schedules().append(pop.get_schedules()[i])
+            crossover_pop.get_schedules().append(schedules[i])
         for _ in range(NUMB_OF_ELITE_SCHEDULES, POPULATION_SIZE):
             parent1 = self._tournament_selection(pop).get_schedules()[0]
             parent2 = self._tournament_selection(pop).get_schedules()[0]
-            child = self._crossover_schedule(parent1, parent2)
+            child = self._crossover_schedule(parent1, parent2) # Asumsi crossover tidak butuh 'data' lagi
             crossover_pop.get_schedules().append(child)
         return crossover_pop
+    
     def _mutate_population(self, population):
         for i in range(NUMB_OF_ELITE_SCHEDULES, POPULATION_SIZE):
-            self._mutate_schedule(population.get_schedules()[i])
+            self._mutate_schedule(population.get_schedules()[i], self.data)
         return population
+    
     def _crossover_schedule(self, parent1, parent2):
         # Buat anak sebagai salinan (deep copy) dari parent1
         child_schedule = copy.deepcopy(parent1)
@@ -506,8 +582,8 @@ class GeneticAlgorithm:
 
         child_schedule._is_fitness_changed = True
         return child_schedule
-    def _mutate_schedule(self, schedule):
-        data = schedule._data
+    
+    def _mutate_schedule(self, schedule, data):
         something_changed = False
 
         for i in range(len(schedule.get_classes())):
@@ -543,8 +619,6 @@ class GeneticAlgorithm:
                     current_class.meeting_times[2] = random.choice(data.get_meeting_times(2))
                 elif course.sks == 1:
                     current_class.meeting_times[1] = random.choice(data.get_meeting_times(1))
-                # Untuk 4 SKS, biarkan mutasi representasi yang menanganinya, atau bisa juga ditambahkan di sini.
-                # Untuk semplicitas, kita biarkan.
                 something_changed = True
 
             # Mutasi Ruangan
@@ -572,12 +646,22 @@ class GeneticAlgorithm:
             schedule._is_fitness_changed = True
                 
         return schedule
+    
     def _tournament_selection(self, pop):
         tournament_pop = Population(0)
         for _ in range(TOURNAMENT_SELECTION_SIZE):
             tournament_pop.get_schedules().append(random.choice(pop.get_schedules()))
-        tournament_pop.get_schedules().sort(key=lambda x: x.get_fitness(), reverse=True)
+        
+        # PERBAIKAN: Gunakan nilai _fitness yang sudah di-cache.
+        # Nilai ini dijamin sudah up-to-date oleh `evolve` sebelum crossover dipanggil.
+        tournament_pop.get_schedules().sort(key=lambda x: x._fitness, reverse=True)
+        
         return tournament_pop
+
+    def close_pool(self):
+        if self.pool:
+            self.pool.close()
+            self.pool.join()
 
 class DisplayManager:
     def _split_schedule_time(self, schedule_string):
@@ -681,61 +765,90 @@ class DisplayManager:
 
 # MAIN EXECUTION BLOCK
 if __name__ == '__main__':
-    # PARAMETER BARU: AMBANG BATAS SKOR
-    # Algoritma akan berhenti jika skor jadwal terbaik DI BAWAH ambang batas ini.
-    # Skor hanya dihitung dari soft conflicts jika tidak ada hard conflicts.
-    # Misal, jika ada 5 soft conflicts, skornya adalah 5.
-    # Kita set ambang batas di 10, artinya kita terima solusi dengan < 10 soft conflicts.
-    SCORE_THRESHOLD = 1.5
+    # Pengaman wajib untuk multiprocessing di beberapa sistem operasi
+    multiprocessing.freeze_support()
+    
+    # --- Konfigurasi Eksekusi ---
+    SCORE_THRESHOLD = 1
     
     start_time = time.time()
-    data = Data()
-    display_manager = DisplayManager()
     
-    print("\nMembuat populasi awal...")
-    population = Population(POPULATION_SIZE)
-    # Pengurutan tetap berdasarkan fitness, karena GA bekerja dengan memaksimalkan fitness
-    population.get_schedules().sort(key=lambda x: x.get_fitness(), reverse=True)
-    
-    best_schedule = population.get_schedules()[0]
-    print(f"Jadwal Awal Terbaik -> Skor: {best_schedule.get_score()} (H: {best_schedule.get_hard_conflicts()}, S: {best_schedule.get_soft_conflicts()})")
+    # Inisialisasi variabel di luar blok try untuk memastikan mereka selalu ada,
+    # bahkan jika terjadi error saat inisialisasi.
+    genetic_algorithm = None
 
-    print(f"\nMemulai proses evolusi untuk {MAX_GENERATION} generasi...")
-    genetic_algorithm = GeneticAlgorithm()
-    generation_num = 0
-    
-    with tqdm(total=MAX_GENERATION, desc="Evolusi Generasi") as pbar:
-        for i in range(MAX_GENERATION):
-            generation_num = i + 1
-            population = genetic_algorithm.evolve(population)
-            population.get_schedules().sort(key=lambda x: x.get_fitness(), reverse=True)
-            
-            best_schedule = population.get_schedules()[0]
-            
-            # Update progress bar dengan informasi skor
-            pbar.set_postfix({
-                "Skor Terbaik": f"{best_schedule.get_score()}",
-                "Hard": f"{best_schedule.get_hard_conflicts()}",
-                "Soft": f"{best_schedule.get_soft_conflicts()}"
-            })
-            pbar.update(1)
-            
-            # Berhenti jika tidak ada hard conflict DAN skor (dari soft conflict) di bawah ambang batas
-            if best_schedule.get_hard_conflicts() == 0 and best_schedule.get_score() < SCORE_THRESHOLD:
-                pbar.n = MAX_GENERATION # Lompat ke akhir progress bar
-                pbar.refresh()
-                print(f"\n\nSolusi Cukup Baik (skor < {SCORE_THRESHOLD}) ditemukan pada generasi ke-{generation_num}!")
-                break
+    try:
+        # 1. Buat objek Data HANYA SEKALI di proses utama
+        print("Memuat dan memproses data sumber...")
+        data = Data()
+        
+        display_manager = DisplayManager()
+        
+        # 2. Buat objek GeneticAlgorithm dan berikan `data` padanya
+        # Objek ini akan mengelola pool proses paralel
+        genetic_algorithm = GeneticAlgorithm(data)
+
+        print("\nMembuat populasi awal...")
+        population = Population(POPULATION_SIZE, data)
+
+        print("Mengevaluasi populasi awal secara paralel...")
+        # =========================================================================
+        # === ALUR BARU: Evaluasi Eksplisit Sebelum Akses Skor ===
+        # =========================================================================
+        # Panggil evolve() satu kali di awal. Fungsi ini akan:
+        # 1. Mengevaluasi semua jadwal di populasi awal secara paralel.
+        # 2. Mengisi nilai _score, _hard_conflicts, dll. di setiap objek Schedule.
+        # 3. Mengurutkan populasi berdasarkan fitness.
+        # 4. Melakukan putaran pertama crossover & mutasi untuk membuat Generasi 1.
+        population = genetic_algorithm.evolve(population)
+        generation_num = 1 # Kita sudah menyelesaikan generasi pertama.
+        
+        # Sekarang aman untuk memanggil getter pasif (`get_score`, dll.)
+        best_schedule = population.get_schedules()[0]
+        print(f"Jadwal Terbaik Gen #{generation_num} -> Skor: {best_schedule.get_score()} (Hard: {best_schedule.get_hard_conflicts()}, Soft: {best_schedule.get_soft_conflicts()})")
+        # =========================================================================
+
+        # Loop utama sekarang berjalan untuk sisa generasi
+        print(f"\nMemulai proses evolusi paralel untuk {MAX_GENERATION - 1} generasi berikutnya...")
+        with tqdm(total=MAX_GENERATION - 1, desc="Evolusi Generasi") as pbar:
+            for i in range(MAX_GENERATION - 1):
+                generation_num += 1
                 
-    end_time = time.time()
-    elapsed_time = end_time - start_time
-    
-    # Modifikasi tampilan output akhir untuk menunjukkan skor
-    best_schedule_final = population.get_schedules()[0]
-    print(f"\n\n--- HASIL AKHIR EVOLUSI ---")
-    print(f"Skor Terbaik Ditemukan : {best_schedule_final.get_score()}")
-    print(f" > Hard Conflicts       : {best_schedule_final.get_hard_conflicts()}")
-    print(f" > Soft Conflicts       : {best_schedule_final.get_soft_conflicts()}")
+                # Panggil evolve untuk generasi selanjutnya
+                population = genetic_algorithm.evolve(population)
+                
+                best_schedule = population.get_schedules()[0]
+                
+                # Getter sekarang aman dipanggil karena evolve sudah memastikan evaluasi
+                pbar.set_postfix({
+                    "Skor Terbaik": f"{best_schedule.get_score()}", 
+                    "Hard": f"{best_schedule.get_hard_conflicts()}", 
+                    "Soft": f"{best_schedule.get_soft_conflicts()}"
+                })
+                pbar.update(1)
+                
+                # Cek kondisi berhenti
+                if best_schedule.get_hard_conflicts() == 0 and best_schedule.get_score() < SCORE_THRESHOLD:
+                    pbar.n = pbar.total # Lompat ke akhir progress bar
+                    pbar.refresh()
+                    print(f"\n\nSolusi Cukup Baik (skor < {SCORE_THRESHOLD}) ditemukan pada generasi ke-{generation_num}!")
+                    break
+        
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+        
+        # Ambil jadwal terbaik dari populasi final
+        best_schedule_final = population.get_schedules()[0]
+        print(f"\n\n--- HASIL AKHIR EVOLUSI ---")
+        print(f"Generasi Terakhir Dicapai : {generation_num}")
+        print(f"Skor Terbaik Ditemukan    : {best_schedule_final.get_score()}")
+        print(f" > Hard Conflicts          : {best_schedule_final.get_hard_conflicts()}")
+        print(f" > Soft Conflicts          : {best_schedule_final.get_soft_conflicts()}")
 
-    # Tampilkan jadwal terbaik dalam format tabel
-    display_manager.print_schedule_as_table(best_schedule_final, generation_num, elapsed_time)
+        display_manager.print_schedule_as_table(best_schedule_final, generation_num, elapsed_time)
+
+    finally:
+        # PENGAMAN: Hanya tutup pool jika objek genetic_algorithm berhasil dibuat.
+        if genetic_algorithm:
+            print("\nMenutup pool proses paralel...")
+            genetic_algorithm.close_pool()
