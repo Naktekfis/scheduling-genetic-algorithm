@@ -1,0 +1,58 @@
+NO,KodeMatkul,NamaMatkul,Tingkat,MatkulSusah,Tipe,sks,no_kelas,KuotaMatkul,jml_peserta,NamaDosen,InisialDosen,jadwalfix,hari-jam-sesi_1,hari-jam-sesi_2,hari-jam-sesi_3
+1,TF2101,Matematika Fisika I,2,0,1,3,1,60,51,"Prof. Ir. Hermawan Kresno Dipojono, M.S.EE, Ph.D. (1.5 SKS) Ir. Miranti Indar Mandasari, S.T., M.T., Ph.D., IPM. (1.5 SKS)","HK, MI",0,0,0,0
+2,TF2101,Matematika Fisika I,2,0,1,3,2,60,50,"Ganes Shukri, S.T., M.Eng., Ph.D. (1.5 SKS) Ashari budi Nugraha, S.T., M.T. (1.5 SKS)","GS, AN",0,0,0,0
+3,TF2102,Probabilitas dan Statistik,2,0,1,3,1,60,49,"Ir. Estiyanti Ekawati, M.T, Ph.D. (1.5 SKS) Anugrah Sabdono Sudarsono, S.T, M.T, Ph.D. (1.5 SKS)","EE, AS",0,0,0,0
+4,TF2102,Probabilitas dan Statistik,2,0,1,3,2,60,55,"Ir. Miranti Indar Mandasari, S.T., M.T., Ph.D., IPM. (1.5 SKS) Rizki Armanto Mangkuto, S.T., M.T., Ph.D. (1.5 SKS)","MI, RM",0,0,0,0
+5,TF2103,Komputasi Rekayasa,2,0,1,3,1,60,48,"Dr. Eng. Nugraha (1.5 SKS) Fadjar Fathurrahman, S.T, M.Si., Ph.D. (1.5 SKS)","NG, FF",1,0,Selasa-13.00-15.00,0
+6,TF2103,Komputasi Rekayasa,2,0,1,3,2,60,47,"Dr. Eng. Muhammad Haris Mahyuddin, S.T., M.Eng. (1.5 SKS) Iwan Prasetiyo, S.T, M.T, Ph.D. (1.5 SKS)","MH, IP",0,0,0,0
+7,TF2104,Rekayasa Termal,2,0,1,3,1,70,48,"Dr. Rahmat Romadhon, S.T, M.T. (3 SKS) Dr. Ahmad Rifqi Muchtar, S.T., M.T. (1 SKS)","RR, AR",0,0,0,0
+8,TF2104,Rekayasa Termal,2,0,1,3,2,70,50,"Dr. Damar Rastri Adhika, S.T, M.Sc. (3 SKS)",DA,0,0,0,0
+9,TF2104,Rekayasa Termal,2,0,1,3,3,70,49,Dr. Eng. Nugraha (3 SKS),NG,0,0,0,0
+10,TF2104,Rekayasa Termal,2,0,1,3,6,60,48,"Narendra Kurnia Putra, S.T., M.T., Ph.D. (3 SKS)",NP,0,0,0,0
+11,TF2105,Elektronika Analog dan Digital,2,0,1,3,1,60,50,"Prof. Dr. Suprijanto, S.T., M.T. (1.5 SKS) Dr. Eng. Muhammad Iqbal, S.T., M.T. (1.5 SKS)","SP, IQ",1,Jumat-15.00-16.00,Kamis-15.00-17.00,0
+12,TF2105,Elektronika Analog dan Digital,2,0,1,3,2,60,49,"Dr. Damar Rastri Andhika, S.T, M.Sc. (1.5 SKS) Dr. Ir. Eko Mursito Budi, M.T. (1.5 SKS)","DA, EB",1,Jumat-15.00-16.00,Kamis-15.00-17.00,0
+13,TF2106,Pengantar Biologi untuk Rekayasa,2,0,1,2,1,60,48,"Dr. Eng. Muhammad Iqbal, S.T., M.T. (1 SKS) Narendra Kurnia Putra, S.T., M.T., Ph.D. (1 SKS)","IQ, NP",0,0,0,0
+14,TF2106,Pengantar Biologi untuk Rekayasa,2,0,1,2,2,60,46,"Narendra Kurnia Putra, S.T., M.T., Ph.D. (1 SKS) Dr. Eng. Muhammad Iqbal, S.T., M.T. (1 SKS)","NP, IQ",0,0,0,0
+15,TF2107,Laboratorium Teknik Fisika I,2,0,3,4,1,60,47,"Dr. Eng. Muhammad Iqbal, S.T., M.T. (1 SKS) Dr. Ir. Eko Mursito Budi, M.T. (1 SKS)","IQ, EB",1,0,0,Kamis-07.00-11.00
+16,TF2107,Laboratorium Teknik Fisika I,2,0,3,4,2,60,46,"Dr. Ir. Eko Mursito Budi, M.T. (1 SKS) Dr. Eng. Muhammad Iqbal, S.T., M.T. (1 SKS)","EB, IQ",1,0,0,Kamis-13.00-17.00
+17,TF3002,Etika Profesi,3,0,1,2,1,60,22,"Dr. Ni Putu Amanda Nitidara, S.T., M.T. (1 SKS) Dr. Vebi Nadhira, S.T, M.T. (1 SKS)","AN, VN",0,0,0,0
+18,TF3002,Etika Profesi,3,0,1,2,2,60,29,"Dr. Vebi Nadhira, S.T, M.T. (1 SKS) Dr. Ni Putu Amanda Nitidara, S.T., M.T. (1 SKS)","VN, AN",0,0,0,0
+19,TF3003,Praktisi Mengajar (Kapita Selekta),3,0,1,2,1,60,27,"Dr. Ni Putu Amanda Nitidara, S.T., M.T. (1 SKS) Dr. Rahmat Romadhon, S.T, M.T. (1 SKS)","AN, RR",0,0,0,0
+20,TF3003,Praktisi Mengajar (Kapita Selekta),3,0,1,2,2,60,30,"Dr. Rahmat Romadhon, S.T, M.T. (1 SKS) Dr. Ni Putu Amanda Nitidara, S.T., M.T. (1 SKS)","RR, AN",0,0,0,0
+21,TF3101,Kontrol Otomatik,3,0,1,3,1,60,9,"Prof. Dr. Ing. Ir. Yul Yunazwin, M.Sc., DIC. (1 SKS) Ayu Gareta Risangtuni, S.T, M.T. (1 SKS) Dr. Azka Muji Burohman, S.Si., M.T. (1 SKS)","YY, AR, AM",0,0,0,0
+22,TF3102,Mekanika Kuantum,3,0,1,3,1,60,46,"Mohammad Kemal Agusta, S.T, M.Eng., Ph.D. (3 SKS)",KA,0,0,0,0
+23,TF3102,Mekanika Kuantum,3,0,1,3,2,60,52,"Ganes Shukri, S.T., M.Eng., Ph.D. (1.5 SKS) Prof. Ir. Hermawan Kresno Dipojono, M.S.EE, Ph.D. (1.5 SKS)","GS, HK",0,0,0,0
+24,TF3103,Rekayasa Optik,3,0,1,3,1,60,46,"Ir. Adhitya Gandaryus Saputro, S.T, M.Eng., Ph.D. (1 SKS) Dr. Vebi Nadhira, S.T, M.T. (1 SKS) Prof. Dr. Suprijanto, S.T., M.T. (1 SKS)","AG, VN, SP",0,0,0,0
+25,TF3103,Rekayasa Optik,3,0,1,3,2,60,46,"Dr. Vebi Nadhira, S.T, M.T. (1 SKS) Ir. Adhitya Gandaryus Saputro, S.T, M.Eng., Ph.D. (1 SKS) Prof. Dr. Suprijanto, S.T., M.T. (1 SKS)","VN, AG, SP",0,0,0,0
+26,TF3104,Sistem Pengukuran,3,0,1,3,1,60,43,"Prof. Dr. Eng. Ir. Deddy Kurniadi, M.Eng. (2 SKS) Faqihza Mukhlish, S.T., M.T., Ph.D. (1 SKS) Dr. Ahmad Rifqi Muchtar, S.T., M.T. (1 SKS)","DK, FM, AR",0,0,0,0
+27,TF3104,Sistem Pengukuran,3,0,1,3,2,60,42,"Faqihza Mukhlish, S.T., M.T., Ph.D. (1.5 SKS) Prof. Dr. Eng. Ir. Deddy Kurniadi, M.Eng. (1.5 SKS) Dr. Ahmad Rifqi Muchtar, S.T., M.T. (1 SKS)","FM, DK, AR",0,0,0,0
+28,TF3105,Pemrosesan Sinyal,3,0,1,3,1,60,47,"Prof. Ir. Endra Joelianto, Ph.D. (1 SKS) Dr. Ir. Eko Mursito Budi, M.T. (1 SKS) Ir. Estiyanti Ekawati, M.T, Ph.D. (1 SKS)","EJ, EB, EE",0,0,0,0
+29,TF3105,Pemrosesan Sinyal,3,0,1,3,2,60,49,"Ir. Estiyanti Ekawati, M.T, Ph.D. (1 SKS) Augie Widyotriatmo, S.T, M.T, Ph.D. (1 SKS) Dr. Ir. Eko Mursito Budi, M.T. (1 SKS)","EE, AW, EB",0,0,0,0
+30,TF3106,Laboratorium Teknik Fisika III,3,0,3,2,1,60,45,"Faqihza Mukhlish, S.T., M.T., Ph.D. (1 SKS) Augie Widyotriatmo, S.T, M.T, Ph.D. (1 SKS)","FM, AW",0,0,0,0
+31,TF3106,Laboratorium Teknik Fisika III,3,0,3,2,2,60,46,"Augie Widyotriatmo, S.T, M.T, Ph.D. (1 SKS) Faqihza Mukhlish, S.T., M.T., Ph.D. (1 SKS)","AW, FM",0,0,0,0
+32,TF3201,Pemrosesan Material,3,0,1,4,1,50,7,"Prof. Brian Yuliarto, Ph.D. (2 SKS) Dr. Eng. Muhammad Iqbal, S.T., M.T. (2 SKS)","BY, IQ",0,0,0,0
+33,TF3202,Fisika Bangunan,3,0,1,4,1,50,1,"Rizki Armanto Mangkuto, S.T., M.T., Ph.D. (2 SKS) Anugrah Sabdono Sudarsono, S.T, M.T, Ph.D. (2 SKS)","RM, AS",0,0,0,0
+34,TF3203,Sistem Energi Hibrida,3,0,1,4,1,50,29,"Prof. Ir. Edi Leksono, M.Eng., Ph.D. (4 SKS) Dr.Ing. Thomas Budiarto, S.T., M.T. (1 SKS)","EL, TB",0,0,0,0
+35,TF3204,Instrumentasi dan Integrasi Sistem Industri,3,0,1,4,1,50,9,"Dr. Ing. Ir. Parsaulian Ishaya Siregar, Dipl.-Ing. (4 SKS)",PS,0,0,0,0
+36,TF3205,Instrumentasi Bio dan Medik,3,0,1,4,1,50,3,"Prof. Dr. Suprijanto, S.T., M.T. (3 SKS) Ayu Gareta Risangtuni, S.T, M.T. (1 SKS)","SP, AR",0,0,0,0
+37,TF3212,Energi Terbarukan,3,0,1,3,1,50,14,"Dr.-Ing. Justin Pradipta, S.T., M.T. (3 SKS) Dr.Ing. Thomas Budiarto, S.T., M.T. (1.5 SKS)","JP, TB",0,0,0,0
+38,TF4001,Tugas Perancangan Terintegrasi II,4,0,1,3,1,60,32,"Iwan Prasetiyo, S.T, M.T, Ph.D. (0.429 SKS) Dr. Irsyad Nashirul Haq, S.T., M.T. (0.429 SKS) Faqihza Mukhlish, S.T., M.T., Ph.D. (0.429 SKS) Dr. Ir. Eko Mursito Budi, M.T. (0.429 SKS) Dr.-Ing. Justin Pradipta, S.T., M.T. (0.429 SKS) Ir. Adhitya Gandaryus Saputro, S.T, M.Eng., Ph.D. (0.429 SKS) Augie Widyotriatmo, S.T, M.T, Ph.D. (0.429 SKS)","IP, IH, FM, EB, JP, AG, AW",0,0,0,0
+39,TF4001,Tugas Perancangan Terintegrasi II,4,0,1,3,2,60,37,"Dr. Ir. Eko Mursito Budi, M.T. (0.429 SKS) Dr.-Ing. Justin Pradipta, S.T., M.T. (0.429 SKS) Ir. Adhitya Gandaryus Saputro, S.T, M.Eng., Ph.D. (0.429 SKS) Iwan Prasetiyo, S.T, M.T, Ph.D. (0.429 SKS) Dr. Irsyad Nashirul Haq, S.T., M.T. (0.429 SKS) Augie Widyotriatmo, S.T, M.T, Ph.D. (0.429 SKS) Faqihza Mukhlish, S.T., M.T., Ph.D. (0.429 SKS)","EB, JP, AG, IP, IH, AW, FM",0,0,0,0
+40,TF4002,Kerja Praktek,4,0,1,3,1,60,35,"Dr. Ni Putu Amanda Nitidara, S.T., M.T. (1.5 SKS) Dr. Eng. Muhammad Iqbal, S.T., M.T. (1.5 SKS)","AN, IQ",0,0,0,0
+41,TF4002,Kerja Praktek,4,0,1,3,2,60,38,"Dr. Eng. Muhammad Iqbal, S.T., M.T. (1.5 SKS) Dr. Ni Putu Amanda Nitidara, S.T., M.T. (1.5 SKS)","IQ, AN",0,0,0,0
+42,TF4013,Metrologi Optik,4,0,1,3,1,50,3,"Prof. Dr. Suprijanto, S.T., M.T. (1.5 SKS) Dr. Vebi Nadhira, S.T, M.T. (1.5 SKS)","SP, VN",0,0,0,0
+43,TF4014,Sistem Kontrol Multivariabel,4,0,1,3,1,50,8,"Prof. Dr. Ing. Ir. Yul Yunazwin, M.Sc., DIC. (1.5 SKS) Dr. Azka Muji Burohman, S.Si., M.T. (1.5 SKS)","YY, AM",0,0,0,0
+44,TF4017,Industrial Internet of Things,4,0,1,3,1,50,35,"Dr. Ir. Eko Mursito Budi, M.T. (1.5 SKS) Faqihza Mukhlish, S.T., M.T., Ph.D. (1.5 SKS)","EB, FM",0,0,0,0
+45,TF4018,Sistem Cerdas,4,0,1,3,1,50,12,"Prof. Ir. Endra Joelianto, Ph.D. (1.5 SKS) Ir. Miranti Indar Mandasari, S.T., M.T., Ph.D., IPM. (1.5 SKS)","EJ, MI",0,0,0,0
+46,TF4021,Teknik Akustik,4,0,1,3,1,50,4,"Iwan Prasetiyo, S.T, M.T, Ph.D. (1.5 SKS) Ir. R. Sugeng Joko Sarwono, M.T., Ph.D. (1 SKS) Ir. Miranti Indar Mandasari, S.T., M.T., Ph.D., IPM. (0.5 SKS)","IP, RS, MI",0,0,0,0
+47,TF4090,Tugas Akhir,4,0,1,3,1,60,21,"Narendra Kurnia Putra, S.T., M.T., Ph.D. (1.5 SKS) Dr. Eng. Muhammad Haris Mahyuddin, S.T., M.Eng. (1.5 SKS)","NP, MH",0,0,0,0
+48,TF4090,Tugas Akhir,4,0,1,3,2,60,24,"Dr. Eng. Muhammad Haris Mahyuddin, S.T., M.Eng. (1.5 SKS) Narendra Kurnia Putra, S.T., M.T., Ph.D. (1.5 SKS)","MH, NP",0,0,0,0
+49,TF4102,Desain Material Komputasional,4,0,1,2,1,50,5,"Ir. Adhitya Gandaryus Saputro, S.T, M.Eng., Ph.D. (1 SKS) Dr. Eng. Muhammad Haris Mahyuddin, S.T., M.Eng. (1 SKS)","AG, MH",0,0,0,0
+50,TF4103,Akustik Lingkungan,4,0,1,2,1,50,8,"Ir. R. Sugeng Joko Sarwono, M.T., Ph.D. (2 SKS)",RS,0,0,0,0
+51,TF4104,Teknik Pencahayaan,4,0,1,2,1,50,4,"Rizki Armanto Mangkuto, S.T., M.T., Ph.D. (2 SKS)",RM,0,0,0,0
+52,TF4105,Rekayasa Lingkungan Termal,4,0,1,2,1,50,10,"Dr. Rahmat Romadhon, S.T, M.T. (2 SKS)",RR,0,0,0,0
+53,TF4106,Sistem Manajemen Energi,4,0,1,3,1,70,25,"Dr. Irsyad Nashirul Haq, S.T., M.T. (3 SKS) Dr.Ing. Thomas Budiarto, S.T., M.T. (1 SKS)","IH, TB",0,0,0,0
+54,TF4107,Robotik dan Otomasi,4,0,1,3,1,50,31,"Augie Widyotriatmo, S.T, M.T, Ph.D. (3 SKS)",AW,0,0,0,0
+55,TF4108,Pembelajaran Mesin untuk Kontrol,4,0,1,3,1,50,33,"Prof. Ir. Endra Joelianto, Ph.D. (3 SKS)",EJ,0,0,0,0
+56,TF4109,Instrumentasi Biomekanik,4,0,1,3,1,60,5,"Narendra Kurnia Putra, S.T., M.T., Ph.D. (3 SKS)",NP,0,0,0,0
+57,TF4110,Perancangan Rekayasa Hayati,4,0,1,3,1,60,3,"Narendra Kurnia Putra, S.T., M.T., Ph.D. (3 SKS)",NP,0,0,0,0
