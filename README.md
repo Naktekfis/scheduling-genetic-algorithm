@@ -1,82 +1,70 @@
-# Implementasi Algoritma Genetika untuk Penjadwalan Kuliah
+# Algoritma Genetika untuk Penjadwalan Kuliah
 
-Proyek ini adalah sebuah implementasi Algoritma Genetika (GA) yang bertujuan untuk mencari solusi penjadwalan mata kuliah. Sistem ini mencoba menyeimbangkan berbagai batasan (*constraints*) untuk menghasilkan jadwal yang fungsional dan memiliki sesedikit mungkin konflik.
+Sebuah implementasi Algoritma Genetika (GA) untuk mencari solusi jadwal mata kuliah. Proyek ini berevolusi menjadi arsitektur hibrida yang lebih kompleks untuk menangani batasan-batasan penjadwalan secara lebih efektif. Fokus utama dari sistem ini adalah pada penjadwalan **waktu**, dan tidak lagi memperhitungkan batasan ketersediaan **ruangan**.
 
-## Fitur Inti
+## Fitur
 
--   **Pencarian Berbasis GA**: Menggunakan pendekatan evolusioner (seleksi, crossover, mutasi) untuk mengeksplorasi ruang pencarian jadwal yang sangat luas.
--   **Sistem Penilaian Konflik**: Kualitas sebuah jadwal diukur berdasarkan sistem skor. Pelanggaran aturan dibagi menjadi dua kategori:
-    -   **Hard Constraints**: Pelanggaran fatal yang harus dihilangkan (misal: bentrok jadwal dosen). Diberi bobot penalti yang sangat tinggi.
-    -   **Soft Constraints**: Pelanggaran preferensi yang sebaiknya dihindari (misal: dosen mengajar lebih dari 4 hari). Diberi bobot penalti rendah.
--   **Berhenti dengan Ambang Batas**: Algoritma dapat diatur untuk berhenti lebih awal jika ditemukan solusi yang sudah memenuhi semua *hard constraint* dan memiliki jumlah skor dari *soft constraint* di bawah ambang batas yang ditentukan.
--   **Konfigurasi Eksternal**:
-    -   Parameter GA (ukuran populasi, laju mutasi, dll.) diatur di `config/settings.py`.
-    -   Aturan penjadwalan dapat diaktifkan atau dinonaktifkan melalui file `data/Constraints.csv`.
--   **Penanganan Logika Penjadwalan**:
-    -   Mendukung penugasan dosen dari beberapa alternatif yang valid untuk satu mata kuliah.
-    -   Menggunakan operator Crossover (swap-based) yang dirancang untuk menjaga integritas jadwal (tidak ada kelas yang hilang atau terduplikasi).
+*   **Arsitektur Hibrida**: Menggabungkan **Algoritma Genetika** dengan **Island Model** (beberapa populasi paralel) dan **Memetic Algorithm** (pencarian lokal) untuk meningkatkan kualitas solusi dan menghindari konvergensi prematur.
+*   **Sistem Skor Berbobot**: Menggunakan `score` untuk mengevaluasi kualitas jadwal, dengan penalti yang jauh lebih tinggi untuk *hard conflict* (pelanggaran wajib) dibandingkan *soft conflict* (pelanggaran preferensi).
+*   **Konfigurasi Terpusat**: Semua parameter utama (ukuran populasi, laju mutasi, parameter Island/Memetic) diatur melalui `config/settings.py`.
+*   **Input Berbasis CSV**:
+    -   Aturan penjadwalan (*constraints*) dapat diaktifkan/dinonaktifkan di `data/Constraints.csv`.
+    -   Data penjadwalan utama, termasuk sesi-sesi per mata kuliah dan dosen, didefinisikan di `data/Input_Update_DK_133_TF_Semester3_2025.csv`.
+*   **Logika Penugasan Dosen**: Mendukung skenario "Dosen Utama" dan "Dosen Sekunder", di mana penugasan Dosen Utama lebih diprioritaskan sebagai *soft constraint*.
+*   **Autopilot Early Stopping**: Algoritma secara otomatis berhenti jika skor solusi terbaik tidak menunjukkan perbaikan (stagnasi) setelah sejumlah generasi yang ditentukan di `settings.py`.
 
 ## Struktur Proyek
-
-Proyek ini diorganisir untuk memisahkan logika, data, dan konfigurasi.
 
 ```
 scheduling-genetic-algorithm/
 ├── config/
-│   └── settings.py               # Pengaturan parameter utama GA.
+│   └── settings.py
 ├── data/
-│   ├── Constraints.csv           # Daftar aturan penjadwalan.
-│   ├── DK_133_TF_Semester3_2025.csv # Data sumber mata kuliah, dosen, dll.
-│   ├── MeetingTime_*.csv         # Definisi slot waktu.
-│   └── Ruangan.csv               # Daftar ruangan dan kapasitas.
+│   ├── Constraints.csv
+│   ├── Input_Update_DK_133_TF_Semester3_2025.csv
+│   ├── MeetingTime_1jam.csv
+│   ├── MeetingTime_2jam.csv
+│   ├── MeetingTime_4jam.csv
+│   └── Ruangan.csv
 ├── src/
-│   ├── penjadwalan_genetic.py    # Skrip eksekusi utama.
-│   └── types/
-│       └── __init__.py           # Definisi dataclass (Course, Room, dll.).
-├── .gitignore
-├── requirements.txt
-└── README.md
+│   ├── constraints/
+│   │   └── constraints_loader.py
+│   ├── type/
+│   │   ├── __init__.py
+│   │   └── time_slot_mapper.py
+│   └── penjadwalan_genetic.py
+├── Jadwal_Final_Optimal...csv
+├── README.md
+└── requirements.txt
 ```
 
 ## Instalasi dan Penggunaan
 
-**1. Environment**
-
-Disarankan untuk menggunakan virtual environment.
-
+**1. Persiapan Lingkungan**
 ```bash
 # Clone repository
 git clone https://github.com/Naktekfis/scheduling-genetic-algorithm
 cd scheduling-genetic-algorithm
 
-# Buat dan aktifkan venv
+# Buat dan aktifkan virtual environment
 python -m venv venv
 source venv/bin/activate  # atau .\venv\Scripts\activate di Windows
 ```
 
 **2. Instal Dependensi**
-
 ```bash
 pip install -r requirements.txt
 ```
 
 **3. Konfigurasi (Opsional)**
-
--   Sesuaikan parameter seperti `POPULATION_SIZE` atau `SCORE_THRESHOLD` di `config/settings.py`.
--   Atur `enabled` (1 atau 0) untuk setiap aturan di `data/Constraints.csv`.
+Sesuaikan parameter di `config/settings.py` atau `data/Constraints.csv` sesuai kebutuhan sebelum menjalankan.
 
 **4. Menjalankan Algoritma**
-
-Pastikan Anda berada di direktori root proyek dan virtual environment aktif.
-
 ```bash
 python src/penjadwalan_genetic.py
 ```
-
-Proses akan berjalan di terminal, menampilkan progres skor dan rincian konflik. Hasil akhir akan ditampilkan di console dan disimpan dalam file `Jadwal_Final_Optimal3.csv`.
+Proses akan berjalan di terminal. Hasil akhir akan ditampilkan di konsol dan disimpan dalam file `.csv` di direktori utama proyek.
 
 ## Catatan Implementasi
-
--   **Kualitas Solusi**: Kualitas jadwal yang dihasilkan sangat bergantung pada kualitas data input dan konfigurasi constraint yang digunakan. Algoritma ini bertujuan untuk menemukan solusi "cukup baik" yang meminimalkan konflik, **bukan menjamin solusi sempurna** tanpa konflik sama sekali.
--   **Performa**: Operator crossover telah dioptimalkan untuk kecepatan. Namun, ukuran populasi yang besar dan jumlah generasi yang tinggi secara alami akan meningkatkan waktu komputasi.
--   **Keterbatasan**: Sistem saat ini belum menangani beberapa skenario yang sangat kompleks seperti dependensi antar mata kuliah (prasyarat) atau optimasi jarak antar gedung. Penambahan fitur tersebut memerlukan modifikasi pada struktur data dan fungsi fitness.
+- Kualitas dan kecepatan konvergensi sangat dipengaruhi oleh parameter di `config/settings.py`. Pengaturan saat ini adalah kompromi antara kecepatan dan pencarian solusi yang mendalam.
+- Sistem ini dirancang untuk menjadi "autopilot", berhenti secara otomatis ketika solusi sudah dianggap cukup baik atau tidak lagi mengalami kemajuan.````
