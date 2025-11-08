@@ -130,6 +130,7 @@ class Schedule:
             return next((mt for mt in self._data.get_all_meeting_times() if mt.time.strip() == str(time_str).strip()), None)
         self._classes = []
         used_slots_in_this_schedule = set()
+        used_rooms_in_schedule = {}  # slot_id -> set(room_id)
         for i, course in enumerate(courses):
             new_class = Class(i, course)
             available_instructors = [ai.instructor for ai in course.assigned_instructors]
@@ -137,12 +138,35 @@ class Schedule:
             if main_instructor and random.random() < 0.7: new_class.instructor = main_instructor
             elif available_instructors: new_class.instructor = random.choice(available_instructors)
             else: new_class.instructor = Instructor(id="N/A", name="TIDAK ADA DOSEN")
+            # prepare rooms list for this class
+            new_class.rooms = []
+            # candidate rooms (capacity >= class size) or all rooms if none
+            candidate_rooms = [r for r in self._data.get_rooms() if r.capacity >= course.max_students]
+            if not candidate_rooms:
+                candidate_rooms = self._data.get_rooms()
             if course.is_fixed:
                 for schedule_str in course.fixed_schedules:
                     meeting_time = find_meeting_time(schedule_str)
                     if meeting_time:
                         new_class.meeting_times.append(meeting_time)
-                        used_slots_in_this_schedule.update(time_mapper.get_1hr_slots(meeting_time.id))
+                        slots = time_mapper.get_1hr_slots(meeting_time.id)
+                        used_slots_in_this_schedule.update(slots)
+                        # assign a random available room that is free for these slots
+                        assigned_room = None
+                        random.shuffle(candidate_rooms)
+                        for room in candidate_rooms:
+                            ok = True
+                            for s in slots:
+                                if s in used_rooms_in_schedule and room.id in used_rooms_in_schedule[s]:
+                                    ok = False; break
+                            if ok:
+                                assigned_room = room; break
+                        if not assigned_room and candidate_rooms:
+                            assigned_room = random.choice(candidate_rooms)
+                        new_class.rooms.append(assigned_room)
+                        if assigned_room:
+                            for s in slots:
+                                used_rooms_in_schedule.setdefault(s, set()).add(assigned_room.id)
             else:
                 # Memastikan meeting time yang di-spawn sesuai dengan SKS mata kuliah
                 sks = course.sks
@@ -150,7 +174,24 @@ class Schedule:
                     possible_times = self._data.get_meeting_times(4) or [random.choice(self._data._meeting_times_4jam)]
                     meeting_time = random.choice(possible_times)
                     new_class.meeting_times.append(meeting_time)
-                    used_slots_in_this_schedule.update(time_mapper.get_1hr_slots(meeting_time.id))
+                    slots = time_mapper.get_1hr_slots(meeting_time.id)
+                    used_slots_in_this_schedule.update(slots)
+                    # assign room for this 4-hour block
+                    assigned_room = None
+                    random.shuffle(candidate_rooms)
+                    for room in candidate_rooms:
+                        ok = True
+                        for s in slots:
+                            if s in used_rooms_in_schedule and room.id in used_rooms_in_schedule[s]:
+                                ok = False; break
+                        if ok:
+                            assigned_room = room; break
+                    if not assigned_room and candidate_rooms:
+                        assigned_room = random.choice(candidate_rooms)
+                    new_class.rooms.append(assigned_room)
+                    if assigned_room:
+                        for s in slots:
+                            used_rooms_in_schedule.setdefault(s, set()).add(assigned_room.id)
                 else:
                     sks_split_rule = {1: [1], 2: [2], 3: [2, 1], 4: [2, 2]}.get(sks, [])
                 for sks_val in sks_split_rule:
@@ -161,14 +202,36 @@ class Schedule:
                     for mt_candidate in possible_times:
                         candidate_slots = set(time_mapper.get_1hr_slots(mt_candidate.id))
                         if candidate_slots.isdisjoint(used_slots_in_this_schedule):
+                            # try to find a room free for these candidate_slots
+                            assigned_room = None
+                            random.shuffle(candidate_rooms)
+                            for room in candidate_rooms:
+                                ok = True
+                                for s in candidate_slots:
+                                    if s in used_rooms_in_schedule and room.id in used_rooms_in_schedule[s]:
+                                        ok = False; break
+                                if ok:
+                                    assigned_room = room; break
+                            # accept if room found
                             new_class.meeting_times.append(mt_candidate)
+                            new_class.rooms.append(assigned_room)
                             used_slots_in_this_schedule.update(candidate_slots)
+                            if assigned_room:
+                                for s in candidate_slots:
+                                    used_rooms_in_schedule.setdefault(s, set()).add(assigned_room.id)
                             found_available_time = True
                             break
                     if not found_available_time:
                         fallback_mt = random.choice(possible_times)
+                        fallback_slots = time_mapper.get_1hr_slots(fallback_mt.id)
+                        # choose any room (may conflict) as fallback
+                        fallback_room = random.choice(candidate_rooms) if candidate_rooms else None
                         new_class.meeting_times.append(fallback_mt)
-                        used_slots_in_this_schedule.update(time_mapper.get_1hr_slots(fallback_mt.id))
+                        new_class.rooms.append(fallback_room)
+                        used_slots_in_this_schedule.update(fallback_slots)
+                        if fallback_room:
+                            for s in fallback_slots:
+                                used_rooms_in_schedule.setdefault(s, set()).add(fallback_room.id)
             self._classes.append(new_class)
         return self
 
@@ -199,7 +262,7 @@ class Schedule:
             if constraints_loader.is_enabled('K6') and len(c.meeting_times) > 1:
                 if len(set(mt.time.split('-')[0] for mt in c.meeting_times)) < len(c.meeting_times): hard_conflicts += 1
 
-            for meeting_time in c.meeting_times:
+            for idx, meeting_time in enumerate(c.meeting_times):
                 if constraints_loader.is_enabled('K5') and meeting_time.is_blocked: hard_conflicts += 1
                 if constraints_loader.is_enabled('L1') and meeting_time.sks == 1 and meeting_time.is_edge_time: soft_conflicts += 1
                 valid_slots = time_mapper.get_1hr_slots(meeting_time.id)
@@ -208,15 +271,39 @@ class Schedule:
                 if day is None: continue
                 num_hours = len(valid_slots)
                 end_hour = start_hour + num_hours
+
+                # Room checks: capacity and double booking
+                assigned_room = None
+                if hasattr(c, 'rooms') and idx < len(c.rooms):
+                    assigned_room = c.rooms[idx]
+                if assigned_room is None:
+                    # missing room assignment is a hard conflict
+                    hard_conflicts += 1
+                else:
+                    # capacity
+                    try:
+                        if assigned_room.capacity < course.max_students:
+                            hard_conflicts += 1
+                    except Exception:
+                        hard_conflicts += 1
+
                 for slot_id in valid_slots:
+                    # check group booking
                     if constraints_loader.is_enabled('K1'):
-                        key_group = ('group', group_id, slot_id); 
+                        key_group = ('group', group_id, slot_id)
                         if key_group in bookings: hard_conflicts += 1
                         else: bookings[key_group] = course.number
+                    # check instructor booking
                     if constraints_loader.is_enabled('K2') and instructor:
-                        key_instr = ('instructor', instructor.id, slot_id); 
+                        key_instr = ('instructor', instructor.id, slot_id)
                         if key_instr in bookings: hard_conflicts += 1
                         else: bookings[key_instr] = course.number
+                    # check room booking
+                    if assigned_room:
+                        key_room = ('room', assigned_room.id, slot_id)
+                        if key_room in bookings: hard_conflicts += 1
+                        else: bookings[key_room] = course.number
+
                     if slot_id not in slot_to_classes_map: slot_to_classes_map[slot_id] = []
                     slot_to_classes_map[slot_id].append(c)
                 if instructor:
@@ -344,6 +431,22 @@ class GeneticAlgorithm:
                         current_class.meeting_times[index_to_mutate] = new_meeting_time
                         something_changed = True
                     except ValueError: pass
+            # Ensure rooms list length matches meeting_times; initialize missing entries
+            if hasattr(current_class, 'rooms'):
+                while len(current_class.rooms) < len(current_class.meeting_times):
+                    # pick a room that fits the class size or any room
+                    candidate_rooms = [r for r in data.get_rooms() if r.capacity >= current_class.course.max_students]
+                    if not candidate_rooms: candidate_rooms = data.get_rooms()
+                    current_class.rooms.append(random.choice(candidate_rooms) if candidate_rooms else None)
+
+            # Randomly mutate room assignments as well
+            if hasattr(current_class, 'rooms') and current_class.rooms and random.random() < settings.MUTATION_RATE:
+                candidate_rooms = [r for r in data.get_rooms() if r.capacity >= current_class.course.max_students]
+                if not candidate_rooms: candidate_rooms = data.get_rooms()
+                # choose a random session to change its room
+                session_idx = random.randrange(0, len(current_class.rooms))
+                current_class.rooms[session_idx] = random.choice(candidate_rooms) if candidate_rooms else None
+                something_changed = True
         if something_changed:
             schedule._is_fitness_changed = True
         return schedule
