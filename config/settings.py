@@ -30,5 +30,5 @@ MIGRATION_SIZE = 5 # Berapa individu terbaik yang akan bermigrasi dari setiap pu
 LOCAL_SEARCH_RATE = 0.05 # Terapkan pencarian lokal pada 10% individu terbaik di setiap pulau
 LOCAL_SEARCH_ITERATIONS = 10 # Jumlah percobaan perbaikan dalam satu kali pencarian lokal
 
-# PARAMETER BARU: Berhenti jika skor terbaik tidak membaik selama N generasi berturut-turut.
+# Berhenti jika skor terbaik tidak membaik selama N generasi berturut-turut.
 EARLY_STOPPING_PATIENCE = 25

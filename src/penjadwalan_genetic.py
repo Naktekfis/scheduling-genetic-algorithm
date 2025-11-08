@@ -136,7 +136,15 @@ class Schedule:
                         new_class.meeting_times.append(meeting_time)
                         used_slots_in_this_schedule.update(time_mapper.get_1hr_slots(meeting_time.id))
             else:
-                sks_split_rule = {1: [1], 2: [2], 3: [2, 1], 4: [2, 2]}.get(course.sks, [])
+                # Memastikan meeting time yang di-spawn sesuai dengan SKS mata kuliah
+                sks = course.sks
+                if sks == 4:
+                    possible_times = self._data.get_meeting_times(4) or [random.choice(self._data._meeting_times_4jam)]
+                    meeting_time = random.choice(possible_times)
+                    new_class.meeting_times.append(meeting_time)
+                    used_slots_in_this_schedule.update(time_mapper.get_1hr_slots(meeting_time.id))
+                else:
+                    sks_split_rule = {1: [1], 2: [2], 3: [2, 1], 4: [2, 2]}.get(sks, [])
                 for sks_val in sks_split_rule:
                     possible_times = self._data.get_meeting_times(sks_val)
                     if not possible_times: continue
@@ -369,19 +377,37 @@ class DisplayManager:
         """Mencetak dan menyimpan jadwal terbaik ke file CSV."""
         classes = sorted(schedule.get_classes(), key=lambda c: c.course.student_group)
         print(f"\n================================================================================================================================================================================================\n JADWAL KULIAH TERBAIK (Generasi #{generation_number})\n > Skor: {schedule.get_score()} (Hard: {schedule.get_hard_conflicts()}, Soft: {schedule.get_soft_conflicts()})\n > Waktu Komputasi: {elapsed_time:.2f} detik\n================================================================================================================================================================================================")
-        table = prettytable.PrettyTable(['No', 'Mata Kuliah', 'Kode', 'SKS', 'Kuota', 'Tingkat', 'Kelas', 'Dosen', 'Hari (Sesi 1)', 'Jam (Sesi 1)', 'Hari (Sesi 2)', 'Jam (Sesi 2)', 'Hari (Sesi 3)', 'Jam (Sesi 3)'])
+        table = prettytable.PrettyTable(['No', 'Mata Kuliah', 'Kode', 'SKS', 'Kuota', 'Tingkat', 'Kelas', 
+                                       'Dosen (Sesi 1)', 'Hari (Sesi 1)', 'Jam (Sesi 1)', 
+                                       'Dosen (Sesi 2)', 'Hari (Sesi 2)', 'Jam (Sesi 2)', 
+                                       'Dosen (Sesi 3)', 'Hari (Sesi 3)', 'Jam (Sesi 3)'])
         for i, current_class in enumerate(classes):
             course = current_class.course
             hari1, jam1, hari2, jam2, hari3, jam3 = '-', '-', '-', '-', '-', '-'
+            dosen1, dosen2, dosen3 = '-', '-', '-'
             meeting_times = current_class.meeting_times
-            if len(meeting_times) > 0: hari1, jam1 = self._split_schedule_time(meeting_times[0].time)
-            if len(meeting_times) > 1: hari2, jam2 = self._split_schedule_time(meeting_times[1].time)
-            if len(meeting_times) > 2: hari3, jam3 = self._split_schedule_time(meeting_times[2].time)
-            instructor_info = current_class.instructor.name if current_class.instructor else "N/A"
+            
+            # Get list of assigned instructors, with the main instructor first
+            assigned_instructors = sorted(course.assigned_instructors, key=lambda x: 0 if x.role == "utama" else 1)
+            instructor_names = [ai.instructor.name for ai in assigned_instructors]
+            
+            # Fill in each session's information
+            if len(meeting_times) > 0: 
+                hari1, jam1 = self._split_schedule_time(meeting_times[0].time)
+                dosen1 = instructor_names[0] if instructor_names else "N/A"
+            if len(meeting_times) > 1: 
+                hari2, jam2 = self._split_schedule_time(meeting_times[1].time)
+                dosen2 = instructor_names[1] if len(instructor_names) > 1 else instructor_names[0] if instructor_names else "N/A"
+            if len(meeting_times) > 2: 
+                hari3, jam3 = self._split_schedule_time(meeting_times[2].time)
+                dosen3 = instructor_names[2] if len(instructor_names) > 2 else instructor_names[-1] if instructor_names else "N/A"
+                
             table.add_row([
                 str(i + 1), course.name, course.number, course.sks, course.max_students,
-                course.student_group[0], course.student_group[1], instructor_info,
-                hari1, jam1, hari2, jam2, hari3, jam3
+                course.student_group[0], course.student_group[1], 
+                dosen1, hari1, jam1,
+                dosen2, hari2, jam2,
+                dosen3, hari3, jam3
             ])
         print(table)
         df = pd.DataFrame(table.rows, columns=table.field_names)
