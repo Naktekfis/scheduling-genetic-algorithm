@@ -16,7 +16,7 @@ sys.path.append(BASE_DIR)
 
 # Impor semua komponen yang dibutuhkan dari proyek
 from config import settings
-from src.type import Instructor, MeetingTime, Course, Class, AssignedInstructor
+from src.type import Instructor, MeetingTime, Course, Class, AssignedInstructor, Room
 from src.type.time_slot_mapper import TimeSlotMapper
 from src.constraints.constraints_loader import ConstraintLoader
 
@@ -38,6 +38,9 @@ class Data:
         MEETING_TIMES_2JAM_DF = pd.read_csv(os.path.join(DATA_DIR, 'MeetingTime_2jam.csv'))
         MEETING_TIMES_1JAM_DF = pd.read_csv(os.path.join(DATA_DIR, 'MeetingTime_1jam.csv'))
         
+        # Muat data ruangan
+        ROOMS_DF = pd.read_csv(os.path.join(DATA_DIR, 'Ruangan.csv'))
+        
         if not os.path.exists(os.path.join(DATA_DIR, DATA_PENJADWALAN_FILE)):
              raise FileNotFoundError(f"File '{DATA_PENJADWALAN_FILE}' tidak ditemukan.")
 
@@ -54,13 +57,17 @@ class Data:
     def __init__(self):
         # Inisialisasi semua list penampung data
         self._meeting_times_1jam, self._meeting_times_2jam, self._meeting_times_4jam = [], [], []
-        self._all_meeting_times, self._instructors, self._courses = [], [], []
+        self._all_meeting_times, self._instructors, self._courses, self._rooms = [], [], [], []
         
         # Proses dan buat objek MeetingTime dari DataFrame
         for _, mt in self.MEETING_TIMES_4JAM_DF.iterrows(): self._meeting_times_4jam.append(MeetingTime(id=str(mt['Kode']), time=str(mt['Jadwal']), sks=4, groups={'g1': int(mt['Group1'])}, is_blocked=(int(mt['Blocked'])==1), is_edge_time=False))
         for _, mt in self.MEETING_TIMES_2JAM_DF.iterrows(): self._meeting_times_2jam.append(MeetingTime(id=str(mt['Kode']), time=str(mt['Jadwal']), sks=2, groups={'g1': int(mt['Group1']), 'g2': int(mt['Group2']), 'g3': int(mt['Group3'])}, is_blocked=(int(mt['Blocked'])==1), is_edge_time=False))
         for _, mt in self.MEETING_TIMES_1JAM_DF.iterrows(): self._meeting_times_1jam.append(MeetingTime(id=str(mt['Kode']), time=str(mt['Jadwal']), sks=1, groups={'g1': int(mt['Group1']), 'g2': int(mt['Group2']), 'g3': int(mt['Group3'])}, is_blocked=(int(mt['Blocked'])==1), is_edge_time=(int(mt['WaktuAkhir'])==1)))
         self._all_meeting_times.extend(self._meeting_times_1jam); self._all_meeting_times.extend(self._meeting_times_2jam); self._all_meeting_times.extend(self._meeting_times_4jam)
+        
+        # Proses dan buat objek Room dari DataFrame
+        for _, room in self.ROOMS_DF.iterrows():
+            self._rooms.append(Room(id=str(room['Ruangan']), capacity=int(room['Kapasitas'])))
 
         # PASS 1: Bangun peta dosen unik dari data mata kuliah
         instructor_map = {}
@@ -105,6 +112,7 @@ class Data:
     def get_all_meeting_times(self): return self._all_meeting_times
     def get_number_of_classes(self): return self._number_of_classes
     def get_time_slot_mapper(self): return self._time_slot_mapper
+    def get_rooms(self): return self._rooms
 
 class Schedule:
     def __init__(self):
@@ -378,9 +386,9 @@ class DisplayManager:
         classes = sorted(schedule.get_classes(), key=lambda c: c.course.student_group)
         print(f"\n================================================================================================================================================================================================\n JADWAL KULIAH TERBAIK (Generasi #{generation_number})\n > Skor: {schedule.get_score()} (Hard: {schedule.get_hard_conflicts()}, Soft: {schedule.get_soft_conflicts()})\n > Waktu Komputasi: {elapsed_time:.2f} detik\n================================================================================================================================================================================================")
         table = prettytable.PrettyTable(['No', 'Mata Kuliah', 'Kode', 'SKS', 'Kuota', 'Tingkat', 'Kelas', 
-                                       'Dosen (Sesi 1)', 'Hari (Sesi 1)', 'Jam (Sesi 1)', 
-                                       'Dosen (Sesi 2)', 'Hari (Sesi 2)', 'Jam (Sesi 2)', 
-                                       'Dosen (Sesi 3)', 'Hari (Sesi 3)', 'Jam (Sesi 3)'])
+                                       'Dosen (Sesi 1)', 'Ruang (Sesi 1)', 'Hari (Sesi 1)', 'Jam (Sesi 1)', 
+                                       'Dosen (Sesi 2)', 'Ruang (Sesi 2)', 'Hari (Sesi 2)', 'Jam (Sesi 2)', 
+                                       'Dosen (Sesi 3)', 'Ruang (Sesi 3)', 'Hari (Sesi 3)', 'Jam (Sesi 3)'])
         for i, current_class in enumerate(classes):
             course = current_class.course
             hari1, jam1, hari2, jam2, hari3, jam3 = '-', '-', '-', '-', '-', '-'
@@ -402,12 +410,17 @@ class DisplayManager:
                 hari3, jam3 = self._split_schedule_time(meeting_times[2].time)
                 dosen3 = instructor_names[2] if len(instructor_names) > 2 else instructor_names[-1] if instructor_names else "N/A"
                 
+            # Get room information for each session
+            room1 = current_class.rooms[0].id if current_class.rooms and len(current_class.rooms) > 0 and current_class.rooms[0] else '-'
+            room2 = current_class.rooms[1].id if current_class.rooms and len(current_class.rooms) > 1 and current_class.rooms[1] else '-'
+            room3 = current_class.rooms[2].id if current_class.rooms and len(current_class.rooms) > 2 and current_class.rooms[2] else '-'
+            
             table.add_row([
                 str(i + 1), course.name, course.number, course.sks, course.max_students,
                 course.student_group[0], course.student_group[1], 
-                dosen1, hari1, jam1,
-                dosen2, hari2, jam2,
-                dosen3, hari3, jam3
+                dosen1, room1, hari1, jam1,
+                dosen2, room2, hari2, jam2,
+                dosen3, room3, hari3, jam3
             ])
         print(table)
         df = pd.DataFrame(table.rows, columns=table.field_names)

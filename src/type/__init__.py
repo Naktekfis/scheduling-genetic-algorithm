@@ -24,6 +24,15 @@ class MeetingTime:
         return self.time
 
 @dataclass(frozen=True)
+class Room:
+    """Mewakili sebuah ruangan dengan kapasitasnya."""
+    id: str  # Kode/nama ruangan
+    capacity: int
+    
+    def __str__(self) -> str:
+        return f"{self.id} (Kapasitas: {self.capacity})"
+
+@dataclass(frozen=True)
 class AssignedInstructor:
     """Mengikat sebuah objek Instructor dengan perannya."""
     instructor: Instructor
@@ -62,6 +71,7 @@ class Class:
     course: Course
     instructor: Optional[Instructor] = None 
     meeting_times: List[MeetingTime] = field(default_factory=list)
+    rooms: List[Optional[Room]] = field(default_factory=list)  # Room untuk setiap sesi
 
     def __str__(self) -> str:
         # Tampilan string di-update untuk mencerminkan struktur baru
